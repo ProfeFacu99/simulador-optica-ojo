@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"><title>Hipermetropía</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        canvas { background: #fff; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; }
+        .controls { display: flex; gap: 25px; background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #ddd; }
+        .group { display: flex; flex-direction: column; width: 180px; }
+        label { font-size: 14px; font-weight: 600; color: #555; }
+        .labels { display: flex; justify-content: space-between; font-size: 12px; color: #888; }
+        input[type="range"] { cursor: pointer; accent-color: #2980b9; }
+        .val { color: #2980b9; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <canvas id="sim" width="900" height="400"></canvas>
+    <div class="controls">
+        <div class="group"><label>Posición del objeto</label><input type="range" id="obj" min="450" max="850" value="500"><div class="labels"><span>cerca</span><span>lejos</span></div></div>
+        <div class="group"><label>Enfoque del cristalino</label><input type="range" id="foc" min="80" max="150" value="100"><div class="labels"><span>grueso</span><span>delgado</span></div></div>
+        <div class="group"><label>Potencia de lente: <span id="valD" class="val">0.00 D</span></label><input type="range" id="dio" min="-5" max="5" step="0.25" value="0"></div>
+    </div>
+    <script>
+        const ctx = document.getElementById('sim').getContext('2d');
+        const obj = document.getElementById('obj'), foc = document.getElementById('foc'), dio = document.getElementById('dio'), valD = document.getElementById('valD');
+        function draw() {
+            ctx.clearRect(0,0,900,400);
+            let oX = parseInt(obj.value), fL = parseInt(foc.value), D = parseFloat(dio.value), cY = 220;
+            let frX = 280, lX = 240, rX = 75, eCX = frX - rX, retX = eCX - rX, cX = 360; // rX = 75 (Hipermetropía)
+            valD.textContent = (D>0?'+':'')+D.toFixed(2)+' D'+(D>0?' (convergente)':(D<0?' (divergente)':''));
+            ctx.beginPath(); ctx.moveTo(0,cY); ctx.lineTo(900,cY); ctx.strokeStyle='#aaa'; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+            ctx.beginPath(); ctx.ellipse(eCX,cY,rX,95,0,0,Math.PI*2); ctx.fillStyle='#fcfcfc'; ctx.fill(); ctx.strokeStyle='#000'; ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(eCX,cY,rX,95,0,Math.PI*0.65,Math.PI*1.35); ctx.strokeStyle='#c0392b'; ctx.lineWidth=5; ctx.stroke(); ctx.fillStyle='#000'; ctx.fillText('Retina',retX-20,cY+115);
+            ctx.beginPath(); ctx.ellipse(frX,cY,15,45,0,-Math.PI*0.4,Math.PI*0.4); ctx.strokeStyle='#3498db'; ctx.lineWidth=3; ctx.stroke(); ctx.fillText('Córnea',frX+5,cY-60);
+            let iX;
+            if(D===0) { iX = lX - (1/((1/fL)-(1/(oX-lX)))); } 
+            else { let fc = 800/D, vX = cX - (1/((1/fc)-(1/(oX-cX)))); iX = lX - (1/((1/fL)-(1/(vX-lX)))); }
+            if(D!==0) {
+                let th = 2+Math.abs(D)*1.5; ctx.beginPath();
+                if(D>0) { ctx.ellipse(cX,cY,th,60,0,0,Math.PI*2); } else { ctx.moveTo(cX-th-5,cY-60); ctx.lineTo(cX+th+5,cY-60); ctx.quadraticCurveTo(cX-th,cY,cX+th+5,cY+60); ctx.lineTo(cX-th-5,cY+60); ctx.quadraticCurveTo(cX+th,cY,cX-th-5,cY-60); }
+                ctx.fillStyle='rgba(241,196,15,0.2)'; ctx.fill(); ctx.strokeStyle='#f39c12'; ctx.stroke(); ctx.fillStyle='#000'; ctx.fillText((D>0?'+':'')+D.toFixed(2)+' D',cX-15,cY-70);
+            }
+            ctx.strokeStyle='#2980b9'; ctx.lineWidth=1.5;
+            [-35,0,35].forEach(off => { ctx.beginPath(); ctx.moveTo(oX,cY); if(D!==0){ ctx.lineTo(cX,cY+off); } ctx.lineTo(lX,cY+off); let tgX = retX-60; let sc = (tgX-lX)/(iX-lX); ctx.lineTo(tgX, (cY+off)+(cY-(cY+off))*sc); ctx.stroke(); });
+            ctx.beginPath(); ctx.ellipse(lX,cY, 32-((fL-80)*0.25),55,0,0,Math.PI*2); ctx.fillStyle='rgba(173,216,230,0.7)'; ctx.fill(); ctx.stroke(); ctx.fillStyle='#000'; ctx.fillText('Cristalino',lX-28,cY+85);
+            ctx.beginPath(); ctx.arc(oX,cY,8,0,Math.PI*2); ctx.fillStyle='#2980b9'; ctx.fill(); ctx.fillStyle='#000'; ctx.fillText('Objeto',oX-15,cY-15);
+            ctx.beginPath(); ctx.arc(iX,cY,6,0,Math.PI*2); ctx.fillStyle='#e67e22'; ctx.fill(); ctx.stroke(); ctx.fillStyle='#000'; ctx.fillText('Foco',iX-14,cY+22);
+            ctx.font='bold 22px Segoe UI'; ctx.textAlign='center';
+            if(Math.abs(iX-retX)<=5){ ctx.fillStyle='#27ae60'; ctx.fillText('Imagen enfocada en la retina',450,40); }
+            else { ctx.fillStyle='#c0392b'; ctx.fillText('Imagen desenfocada ('+(iX<retX?'foco detrás de la retina':'foco antes de la retina')+')',450,40); }
+            ctx.textAlign='left';
+        }
+        [obj,foc,dio].forEach(e=>e.addEventListener('input',draw)); draw();
+    </script>
+</body>
+</html>
