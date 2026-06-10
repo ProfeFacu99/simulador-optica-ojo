@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador: Cámara Oscura</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        canvas {
+            background-color: #ffffff;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .panel {
+            background: #f8f8f8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            width: 1000px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .checkbox-group {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+            grid-column: span 2;
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+        }
+        label {
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            color: #555;
+            display: flex;
+            justify-content: space-between;
+            font-weight: 500;
+        }
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        input[type="checkbox"] {
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+        }
+        select {
+            padding: 5px;
+            background: #fff;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-reset {
+            grid-column: span 2;
+            padding: 10px;
+            background-color: #e9ecef;
+            color: #333;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        }
+        .btn-reset:hover {
+            background-color: #dde0e3;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="simCanvas" width="1000" height="650"></canvas>
+
+    <div class="panel">
+        <div class="control-group">
+            <label>Distancia del Objeto (cm) <span id="valObjDist">30</span></label>
+            <input type="range" id="objDist" min="10" max="60" value="30">
+        </div>
+        <div class="control-group">
+            <label>Distancia de la Pantalla / Profundidad (cm) <span id="valScreenDist">35</span></label>
+            <input type="range" id="screenDist" min="10" max="50" value="35">
+        </div>
+        <div class="control-group">
+            <label>Tamaño del Estenopo (mm) <span id="valAperture">2.0</span></label>
+            <input type="range" id="aperture" min="0.5" max="15" step="0.5" value="2.0">
+        </div>
+        <div class="control-group">
+            <label>Cantidad de Rayos (por color) <span id="valRays">25</span></label>
+            <input type="range" id="rays" min="1" max="500" value="25">
+        </div>
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="emitAll">
+            <label for="emitAll" style="margin-bottom: 0; cursor: pointer; color: #333;">Simular emisión en todas direcciones</label>
+        </div>
+
+        <div class="control-group" style="grid-column: span 2;">
+            <label>Color Paredes Internas</label>
+            <select id="wallColor">
+                <option value="black">Negro Mate</option>
+                <option value="white">Blanco</option>
+            </select>
+        </div>
+        
+        <button class="btn-reset" id="btnReset"><span>↻</span> Restablecer Valores</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const inputs = {
+            objDist: document.getElementById('objDist'),
+            screenDist: document.getElementById('screenDist'),
+            aperture: document.getElementById('aperture'),
+            rays: document.getElementById('rays'),
+            emitAll: document.getElementById('emitAll'),
+            wallColor: document.getElementById('wallColor')
+        };
+
+        const values = {
+            objDist: document.getElementById('valObjDist'),
+            screenDist: document.getElementById('valScreenDist'),
+            aperture: document.getElementById('valAperture'),
+            rays: document.getElementById('valRays')
+        };
+
+        const btnReset = document.getElementById('btnReset');
+
+        const defaultValues = {
+            objDist: 30,
+            screenDist: 35,
+            aperture: 2.0,
+            rays: 25,
+            emitAll: false,
+            wallColor: 'black'
+        };
+
+        const scale = 8;
+        const centerY = 200; 
+
+        const lightSources = [
+            { r: 50, g: 50, b: 200, yOffset: -30 }, 
+            { r: 20, g: 180, b: 50, yOffset: 0 },   
+            { r: 220, g: 30, b: 30, yOffset: 30 }   
+        ];
+
+        function draw() {
+            values.objDist.innerText = inputs.objDist.value;
+            values.screenDist.innerText = inputs.screenDist.value;
+            values.aperture.innerText = parseFloat(inputs.aperture.value).toFixed(1);
+            values.rays.innerText = inputs.rays.value;
+
+            const dObjCm = parseFloat(inputs.objDist.value);
+            const dScreenCm = parseFloat(inputs.screenDist.value);
+            const apertureMm = parseFloat(inputs.aperture.value);
+            
+            const dObj = dObjCm * scale;
+            const dScreen = dScreenCm * scale;
+            const apertureSize = apertureMm * (scale / 10);
+            const numRays = parseInt(inputs.rays.value);
+            const emitAll = inputs.emitAll.checked;
+            const wallColor = inputs.wallColor.value;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const pinholeX = canvas.width / 2;
+            const objX = pinholeX - dObj;
+            const screenX = pinholeX + dScreen;
+
+            // La caja superior tiene 200px de altura (desde Y=100 hasta Y=300)
+            const boxTopY = centerY - 100;
+            const boxBottomY = centerY + 100;
+
+            // 1. DIBUJAR VISTA SUPERIOR
+            
+            ctx.fillStyle = wallColor === 'black' ? '#222' : '#eee';
+            ctx.fillRect(pinholeX, boxTopY, dScreen, boxBottomY - boxTopY);
+
+            const rayOpacity = numRays === 1 ? 0.8 : Math.max(0.05, 1.5 / Math.sqrt(numRays));
+
+            lightSources.forEach(source => {
+                const sourceColorStr = `rgba(${source.r}, ${source.g}, ${source.b}, OPACITY)`;
+                const sourceY = centerY + source.yOffset;
+                
+                if (emitAll) {
+                    ctx.lineWidth = 1;
+                    for (let j = 0; j < 120; j++) {
+                        let angle = Math.random() * Math.PI * 2;
+                        let dirX = Math.cos(angle);
+                        let dirY = Math.sin(angle);
+                        let endX, endY;
+                        
+                        if (dirX > 0) {
+                            let distToWall = pinholeX - objX;
+                            endY = sourceY + (dirY/dirX) * distToWall;
+                            endX = pinholeX;
+                            if (endY > centerY - apertureSize/2 && endY < centerY + apertureSize/2) continue;
+                            if (endY < -50 || endY > 450) {
+                                endX = objX + dirX * 300;
+                                endY = sourceY + dirY * 300;
+                            }
+                        } else {
+                            endX = objX + dirX * 250;
+                            endY = sourceY + dirY * 250;
+                        }
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(objX, sourceY);
+                        ctx.lineTo(endX, endY);
+                        ctx.strokeStyle = sourceColorStr.replace('OPACITY', '0.08');
+                        ctx.stroke();
+                    }
+                }
+
+                ctx.fillStyle = sourceColorStr.replace('OPACITY', '1');
+                ctx.fillRect(objX - 20, sourceY - 14, 20, 28); 
+
+                for (let i = 0; i < numRays; i++) {
+                    const sY = numRays === 1 ? sourceY : sourceY + (Math.random() - 0.5) * 25;
+                    const pY = numRays === 1 ? centerY : centerY + (Math.random() - 0.5) * apertureSize;
+
+                    let rayStartX = objX;
+                    let rayStartY = sY;
+                    let rayDirX = pinholeX - rayStartX;
+                    let rayDirY = pY - rayStartY;
+
+                    const len = Math.sqrt(rayDirX*rayDirX + rayDirY*rayDirY);
+                    rayDirX /= len;
+                    rayDirY /= len;
+
+                    let hitX = pinholeX;
+                    let hitY = pY;
+
+                    ctx.beginPath();
+                    ctx.moveTo(rayStartX, rayStartY);
+                    ctx.lineTo(hitX, hitY);
+                    ctx.strokeStyle = sourceColorStr.replace('OPACITY', rayOpacity);
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    let insideX = hitX;
+                    let insideY = hitY;
+                    let bouncing = true;
+
+                    ctx.beginPath();
+                    ctx.moveTo(insideX, insideY);
+
+                    while (bouncing) {
+                        let nextX = screenX;
+                        let nextY = insideY + (rayDirY / rayDirX) * (nextX - insideX);
+
+                        if (nextY < boxTopY || nextY > boxBottomY) {
+                            let wallY = nextY < boxTopY ? boxTopY : boxBottomY;
+                            let wallX = insideX + (rayDirX / rayDirY) * (wallY - insideY);
+
+                            ctx.lineTo(wallX, wallY);
+
+                            if (wallColor === 'black') {
+                                bouncing = false;
+                            } else {
+                                insideX = wallX;
+                                insideY = wallY;
+                                rayDirY = -rayDirY;
+                            }
+                        } else {
+                            ctx.lineTo(nextX, nextY);
+                            bouncing = false;
+                        }
+                    }
+                    ctx.stroke();
+                }
+            });
+
+            ctx.strokeStyle = '#000';
+            ctx.fillStyle = '#000';
+            ctx.lineWidth = 4;
+            
+            ctx.beginPath();
+            ctx.moveTo(pinholeX, boxTopY - 5);
+            ctx.lineTo(pinholeX, centerY - apertureSize/2);
+            ctx.moveTo(pinholeX, centerY + apertureSize/2);
+            ctx.lineTo(pinholeX, boxBottomY + 5);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(pinholeX, boxTopY);
+            ctx.lineTo(screenX, boxTopY);
+            ctx.moveTo(pinholeX, boxBottomY);
+            ctx.lineTo(screenX, boxBottomY);
+            ctx.stroke();
+
+            ctx.fillStyle = '#777';
+            ctx.fillRect(screenX, boxTopY, 15, boxBottomY - boxTopY);
+
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.fillText('ESTENOPO', pinholeX - 70, centerY - 20);
+            ctx.fillText('PANTALLA', screenX + 25, centerY);
+            ctx.fillText('LÁMPARA RGB', objX - 30, centerY - 60);
+
+            // 2. DIBUJAR VISTA FRONTAL
+            
+            const screenViewCenterY = 530;
+            const screenViewCenterX = canvas.width / 2;
+
+            ctx.beginPath();
+            ctx.moveTo(50, 400);
+            ctx.lineTo(950, 400);
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('VISTA FRONTAL DE LA PANTALLA', screenViewCenterX, 420);
+            ctx.textAlign = 'left';
+
+            // Dibujar el recuadro negro de fondo de pantalla (altura ajustada a 200px para coincidir con escala superior)
+            ctx.fillStyle = '#1a1a1a'; 
+            ctx.fillRect(screenViewCenterX - 150, 430, 300, 200);
+
+            // Cálculos ópticos ajustados
+            const magnification = dScreenCm / dObjCm;
+            
+            const area = Math.pow(apertureMm, 2);
+            const distFactor = Math.pow(30 / dScreenCm, 2); 
+            let baseIntensity = (area / 4) * distFactor; 
+            
+            let visualIntensity = Math.min(1.0, Math.max(0.3, Math.pow(baseIntensity, 0.4)));
+            const blurRadius = apertureMm * 1.2 * (1 + magnification);
+
+            ctx.save(); 
+
+            // Máscara de recorte (clip)
+            ctx.beginPath();
+            ctx.rect(screenViewCenterX - 150, 430, 300, 200);
+            ctx.clip();
+
+            // Fondo lavado general si hay paredes blancas
+            if (wallColor === 'white') {
+                ctx.fillStyle = `rgba(255, 255, 255, ${visualIntensity * 0.15})`;
+                ctx.fillRect(screenViewCenterX - 150, 430, 300, 200);
+            }
+
+            lightSources.forEach(source => {
+                const projectedYOffset = -source.yOffset * scale * magnification; 
+                const trueY = projectedYOffset / scale;
+                
+                const projWidth = 20 * magnification;
+                const projHeight = 28 * magnification;
+
+                const drawX = screenViewCenterX - projWidth / 2;
+                const drawY = screenViewCenterY + trueY - projHeight / 2;
+
+                const r = source.r;
+                const g = source.g;
+                const b = source.b;
+
+                // 1. DIBUJAR IMAGEN PRINCIPAL
+                ctx.filter = `blur(${blurRadius}px)`;
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${visualIntensity})`;
+                ctx.fillRect(drawX, drawY, projWidth, projHeight);
+
+                // 2. DIBUJAR REFLEXIONES MATEMÁTICAS (Si la pared es blanca)
+                if (wallColor === 'white') {
+                    // Calculamos el rebote asumiendo la pared en +/- 100px desde el centro
+                    const topBouncedY = -200 - trueY;
+                    const bottomBouncedY = 200 - trueY;
+
+                    // Dibujamos con mucho más desenfoque simulando la pared mate (reflexión difusa)
+                    ctx.filter = `blur(${blurRadius + 30}px)`;
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${visualIntensity * 0.6})`;
+
+                    // Rebote superior
+                    ctx.fillRect(drawX, screenViewCenterY + topBouncedY - projHeight / 2, projWidth, projHeight);
+                    // Rebote inferior
+                    ctx.fillRect(drawX, screenViewCenterY + bottomBouncedY - projHeight / 2, projWidth, projHeight);
+                }
+            });
+
+            ctx.restore(); 
+
+            // Borde exterior 
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(screenViewCenterX - 150, 430, 300, 200);
+        }
+
+        btnReset.addEventListener('click', () => {
+            inputs.objDist.value = defaultValues.objDist;
+            inputs.screenDist.value = defaultValues.screenDist;
+            inputs.aperture.value = defaultValues.aperture;
+            inputs.rays.value = defaultValues.rays;
+            inputs.emitAll.checked = defaultValues.emitAll;
+            inputs.wallColor.value = defaultValues.wallColor;
+            draw();
+        });
+
+        Object.values(inputs).forEach(input => {
+            input.addEventListener('input', draw);
+        });
+
+        draw();
+    </script>
+</body>
+</html>
