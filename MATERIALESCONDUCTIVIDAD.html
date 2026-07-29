@@ -1,0 +1,290 @@
+<div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; box-sizing: border-box;">
+    
+    <h3 style="text-align: center; margin-top: 0; color: #333;">Modelo de Conducción Eléctrica</h3>
+    
+    <!-- Lienzo de simulación -->
+    <canvas id="simCanvas" width="618" height="280" style="display: block; margin: 0 auto; background-color: #f9f9f9; border: 1px solid #ccc; border-radius: 4px;"></canvas>
+    
+    <!-- Leyenda dinámica -->
+    <div id="leyenda" style="margin-top: 8px; font-size: 12px; color: #555; text-align: center; min-height: 20px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; align-items: center;">
+        <!-- Se llena con JS -->
+    </div>
+
+    <!-- Controles con menús desplegables y botón disimulado -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 15px; gap: 15px;">
+        <div style="flex: 1; display: flex; flex-direction: column;">
+            <label for="selectMaterial" style="font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #555;">Material:</label>
+            <select id="selectMaterial" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; cursor: pointer; background-color: #fff;">
+                <option value="conductor">Metal (Conductor)</option>
+                <option value="aislante">Plástico / Vidrio (Aislante)</option>
+                <option value="agua_pura">Agua Pura (Aislante)</option>
+                <option value="agua_sal">Agua con Sal (Conductor)</option>
+            </select>
+        </div>
+        
+        <div style="flex: 1; display: flex; flex-direction: column;">
+            <label for="selectCargas" style="font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #555;">Extremos del material:</label>
+            <select id="selectCargas" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; cursor: pointer; background-color: #fff;">
+                <option value="neutro">Sin cargas (Neutro)</option>
+                <option value="cargas">Con cargas externas</option>
+            </select>
+        </div>
+
+        <!-- Botón para mostrar/ocultar explicación (disimulado) -->
+        <button id="btnToggleExp" title="Ver explicación" style="background: none; border: none; font-size: 22px; cursor: pointer; padding: 5px; opacity: 0.7; transition: 0.2s; margin-bottom: 2px;">
+            💡
+        </button>
+    </div>
+
+    <!-- Cuadro de explicación dinámica (Oculto por defecto) -->
+    <div id="textoExplicativo" style="display: none; margin-top: 15px; padding: 15px; background-color: #eef5f9; border-left: 4px solid #0056b3; color: #333; font-size: 14px; line-height: 1.5; min-height: 80px;">
+        Los electrones de valencia se mueven libremente por todo el material de forma caótica, rebotando con los iones fijos como si fueran un gas.
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const selectMaterial = document.getElementById('selectMaterial');
+        const selectCargas = document.getElementById('selectCargas');
+        const textoExplicativo = document.getElementById('textoExplicativo');
+        const btnToggleExp = document.getElementById('btnToggleExp');
+        const leyenda = document.getElementById('leyenda');
+
+        let modoMaterial = 'conductor'; 
+        let hasExternalCharges = false;
+        let isExpVisible = false;
+
+        const ionesSolido = [];
+        const electrones = [];
+        const moleculasAgua = [];
+        const ionesSal = [];
+        
+        const filas = 4;
+        const columnas = 8;
+        const espaciadoX = canvas.width / columnas;
+        const espaciadoY = canvas.height / filas;
+
+        const descripciones = {
+            conductor_neutro: "Los electrones de valencia se mueven libremente por todo el material de forma caótica, rebotando con los iones fijos como si fueran un gas.",
+            conductor_cargas: "Las cargas externas empujan y atraen a los electrones libres. Estos mantienen su movimiento caótico, pero ahora avanzan progresivamente hacia el lado positivo. ¡Se genera corriente!",
+            
+            aislante_neutro: "Los electrones están fuertemente ligados a su ión. Solo orbitan o vibran muy cerca de su núcleo y no saltan de un átomo a otro.",
+            aislante_cargas: "Las cargas externas atraen a los electrones. Como están fuertemente unidos a su átomo, solo estiran levemente su órbita hacia el lado positivo (polarización). No se desprenden y no hay corriente.",
+            
+            agua_pura_neutro: "El agua pura está formada por moléculas neutras que tienen un lado levemente negativo (oxígeno) y otro positivo (hidrógenos). Se mueven y chocan aleatoriamente.",
+            agua_pura_cargas: "Al acercar cargas, las moléculas de agua se alinean, orientando su lado negativo hacia la carga positiva externa. Al no haber partículas libres para desplazarse, no hay corriente.",
+            
+            agua_sal_neutro: "Al disolver sal (NaCl), esta se separa en iones positivos (Na+) y negativos (Cl-). Estos iones flotan libres entre las moléculas de agua, moviéndose al azar.",
+            agua_sal_cargas: "Al acercar cargas externas, la conducción es distinta a los metales. No se mueven electrones libres, sino que los iones viajan por el agua: los iones negativos (Cl-) van hacia el extremo positivo y los positivos (Na+) hacia el extremo negativo. ¡Se genera corriente!"
+        };
+
+        // Función para generar un circulito HTML del color que le pasemos
+        const dot = (color) => `<span style="display:inline-block; width:12px; height:12px; background:${color}; border-radius:50%; margin-right:4px; border:1px solid #ccc; vertical-align:-2px;"></span>`;
+
+        function actualizarLeyenda() {
+            if (modoMaterial === 'conductor') {
+                leyenda.innerHTML = `<span>${dot('#e74c3c')} Ión fijo (+)</span> <span>${dot('#3498db')} Electrón libre (-)</span>`;
+            } else if (modoMaterial === 'aislante') {
+                leyenda.innerHTML = `<span>${dot('#e74c3c')} Ión fijo (+)</span> <span>${dot('#3498db')} Electrón ligado (-)</span>`;
+            } else if (modoMaterial === 'agua_pura') {
+                leyenda.innerHTML = `<span>${dot('#ff6b6b')} Oxígeno (lado -)</span> <span>${dot('#ffffff')} Hidrógenos (lado +)</span>`;
+            } else if (modoMaterial === 'agua_sal') {
+                leyenda.innerHTML = `<span>${dot('#ff6b6b')} Molécula de Agua</span> <span>${dot('#2ecc71')} Ión Na+ (1 electrón de menos)</span> <span>${dot('#f1c40f')} Ión Cl- (1 electrón de más)</span>`;
+            }
+        }
+
+        function inicializarSistema() {
+            ionesSolido.length = 0; electrones.length = 0;
+            moleculasAgua.length = 0; ionesSal.length = 0;
+
+            if (modoMaterial === 'conductor' || modoMaterial === 'aislante') {
+                for (let i = 0; i < columnas; i++) {
+                    for (let j = 0; j < filas; j++) {
+                        ionesSolido.push({ x: (i + 0.5) * espaciadoX, y: (j + 0.5) * espaciadoY });
+                    }
+                }
+                if (modoMaterial === 'conductor') {
+                    for (let i = 0; i < filas * columnas * 2; i++) {
+                        electrones.push({
+                            x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                            vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4
+                        });
+                    }
+                } else {
+                    ionesSolido.forEach(ion => {
+                        for (let e = 0; e < 2; e++) {
+                            electrones.push({
+                                ionBase: ion, angulo: Math.random() * Math.PI * 2,
+                                radio: 12 + Math.random() * 5, velocidadAngular: 0.1 + Math.random() * 0.1
+                            });
+                        }
+                    });
+                }
+            } else {
+                for (let i = 0; i < 45; i++) {
+                    moleculasAgua.push({
+                        x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                        vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2,
+                        angulo: Math.random() * Math.PI * 2,
+                        vAngulo: (Math.random() - 0.5) * 0.2
+                    });
+                }
+                if (modoMaterial === 'agua_sal') {
+                    for (let i = 0; i < 15; i++) {
+                        ionesSal.push({
+                            tipo: 'positivo', x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                            vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2
+                        });
+                        ionesSal.push({
+                            tipo: 'negativo', x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                            vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2
+                        });
+                    }
+                }
+            }
+        }
+
+        function actualizarTextos() {
+            let estado = modoMaterial + "_" + (hasExternalCharges ? "cargas" : "neutro");
+            textoExplicativo.innerText = descripciones[estado];
+            
+            let color = (modoMaterial === 'conductor' || modoMaterial === 'agua_sal') ? "#0056b3" : "#8e44ad";
+            textoExplicativo.style.borderLeftColor = color;
+            
+            actualizarLeyenda();
+        }
+
+        function dibujarMoleculaAgua(m) {
+            ctx.save();
+            ctx.translate(m.x, m.y);
+            ctx.rotate(m.angulo);
+            
+            ctx.lineWidth = 1.5;
+            
+            ctx.fillStyle = "#ff6b6b"; 
+            ctx.strokeStyle = "#c0392b";
+            ctx.beginPath(); ctx.arc(4, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.closePath();
+            
+            ctx.fillStyle = "#ffffff"; 
+            ctx.strokeStyle = "#7f8c8d";
+            ctx.beginPath(); ctx.arc(-3, -5, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.closePath();
+            ctx.beginPath(); ctx.arc(-3, 5, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.closePath();
+            
+            ctx.restore();
+        }
+
+        function animar() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (hasExternalCharges) {
+                ctx.globalAlpha = 0.2;
+                ctx.font = "180px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                ctx.fillStyle = "blue"; ctx.fillText("-", 40, canvas.height / 2);
+                ctx.fillStyle = "red"; ctx.fillText("+", canvas.width - 40, canvas.height / 2);
+                ctx.globalAlpha = 1.0;
+            }
+
+            if (modoMaterial === 'conductor' || modoMaterial === 'aislante') {
+                ctx.fillStyle = "#e74c3c";
+                ionesSolido.forEach(ion => {
+                    ctx.beginPath(); ctx.arc(ion.x, ion.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.closePath();
+                    ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                    ctx.fillText("+", ion.x, ion.y + 1);
+                    ctx.fillStyle = "#e74c3c";
+                });
+
+                ctx.fillStyle = "#3498db";
+                electrones.forEach(e => {
+                    let drawX, drawY;
+                    if (modoMaterial === 'conductor') {
+                        e.vx += (Math.random() - 0.5) * 1.5;
+                        e.vy += (Math.random() - 0.5) * 1.5;
+                        const speed = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+                        if (speed > 3) { e.vx = (e.vx / speed) * 3; e.vy = (e.vy / speed) * 3; }
+
+                        let drift = hasExternalCharges ? 1.5 : 0;
+                        e.x += e.vx + drift; e.y += e.vy;
+
+                        if (e.x > canvas.width) e.x = 0; if (e.x < 0) e.x = canvas.width;
+                        if (e.y > canvas.height) e.y -= canvas.height; if (e.y < 0) e.y += canvas.height;
+                        drawX = e.x; drawY = e.y;
+                    } else {
+                        e.angulo += e.velocidadAngular;
+                        let estiramientoX = hasExternalCharges ? 15 : 0;
+                        drawX = e.ionBase.x + estiramientoX + Math.cos(e.angulo) * e.radio;
+                        drawY = e.ionBase.y + Math.sin(e.angulo) * e.radio * 0.7;
+                    }
+                    ctx.beginPath(); ctx.arc(drawX, drawY, 4, 0, Math.PI * 2); ctx.fill(); ctx.closePath();
+                });
+            } else {
+                moleculasAgua.forEach(m => {
+                    m.x += m.vx; m.y += m.vy;
+                    if (m.x > canvas.width) m.x = 0; if (m.x < 0) m.x = canvas.width;
+                    if (m.y > canvas.height) m.y = 0; if (m.y < 0) m.y = canvas.height;
+
+                    if (hasExternalCharges) {
+                        let targetAngulo = 0;
+                        m.angulo += (targetAngulo - m.angulo) * 0.05;
+                    } else {
+                        m.angulo += m.vAngulo;
+                    }
+                    dibujarMoleculaAgua(m);
+                });
+
+                if (modoMaterial === 'agua_sal') {
+                    ionesSal.forEach(ion => {
+                        ion.vx += (Math.random() - 0.5) * 1.0;
+                        ion.vy += (Math.random() - 0.5) * 1.0;
+                        const speed = Math.sqrt(ion.vx * ion.vx + ion.vy * ion.vy);
+                        if (speed > 2) { ion.vx = (ion.vx / speed) * 2; ion.vy = (ion.vy / speed) * 2; }
+
+                        let drift = 0;
+                        if (hasExternalCharges) {
+                            drift = (ion.tipo === 'positivo') ? -1.5 : 1.5;
+                        }
+                        
+                        ion.x += ion.vx + drift; ion.y += ion.vy;
+                        if (ion.x > canvas.width) ion.x = 0; if (ion.x < 0) ion.x = canvas.width;
+                        if (ion.y > canvas.height) ion.y -= canvas.height; if (ion.y < 0) ion.y += canvas.height;
+
+                        ctx.fillStyle = (ion.tipo === 'positivo') ? "#2ecc71" : "#f1c40f"; 
+                        ctx.beginPath(); ctx.arc(ion.x, ion.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.closePath();
+                        ctx.fillStyle = "black"; ctx.font = "12px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                        ctx.fillText((ion.tipo === 'positivo') ? "+" : "-", ion.x, ion.y + 1);
+                    });
+                }
+            }
+
+            requestAnimationFrame(animar);
+        }
+
+        // Eventos
+        btnToggleExp.addEventListener('click', () => {
+            isExpVisible = !isExpVisible;
+            textoExplicativo.style.display = isExpVisible ? 'block' : 'none';
+            btnToggleExp.style.opacity = isExpVisible ? '1' : '0.7';
+        });
+
+        selectMaterial.addEventListener('change', (e) => {
+            modoMaterial = e.target.value;
+            selectCargas.value = 'neutro';
+            hasExternalCharges = false;
+            
+            isExpVisible = false;
+            textoExplicativo.style.display = 'none';
+            btnToggleExp.style.opacity = '0.7';
+            
+            inicializarSistema();
+            actualizarTextos();
+        });
+
+        selectCargas.addEventListener('change', (e) => {
+            hasExternalCharges = (e.target.value === 'cargas');
+            actualizarTextos();
+        });
+
+        inicializarSistema();
+        actualizarTextos();
+        animar();
+    </script>
+</div>
