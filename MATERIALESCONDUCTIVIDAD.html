@@ -80,6 +80,13 @@
 
         // Función para generar un circulito HTML del color que le pasemos
         const dot = (color) => `<span style="display:inline-block; width:12px; height:12px; background:${color}; border-radius:50%; margin-right:4px; border:1px solid #ccc; vertical-align:-2px;"></span>`;
+        
+        // Ícono SVG de la molécula de agua para la leyenda
+        const waterIcon = `<svg width="18" height="18" viewBox="0 0 20 20" style="vertical-align: -4px; margin-right: 4px;">
+            <circle cx="6" cy="5" r="3.5" fill="#ffffff" stroke="#7f8c8d" stroke-width="1.5"/>
+            <circle cx="6" cy="15" r="3.5" fill="#ffffff" stroke="#7f8c8d" stroke-width="1.5"/>
+            <circle cx="13" cy="10" r="5.5" fill="#ff6b6b" stroke="#c0392b" stroke-width="1.5"/>
+        </svg>`;
 
         function actualizarLeyenda() {
             if (modoMaterial === 'conductor') {
@@ -87,9 +94,9 @@
             } else if (modoMaterial === 'aislante') {
                 leyenda.innerHTML = `<span>${dot('#e74c3c')} Ión fijo (+)</span> <span>${dot('#3498db')} Electrón ligado (-)</span>`;
             } else if (modoMaterial === 'agua_pura') {
-                leyenda.innerHTML = `<span>${dot('#ff6b6b')} Oxígeno (lado -)</span> <span>${dot('#ffffff')} Hidrógenos (lado +)</span>`;
+                leyenda.innerHTML = `<span>${waterIcon} Molécula de Agua (Neutra)</span>`;
             } else if (modoMaterial === 'agua_sal') {
-                leyenda.innerHTML = `<span>${dot('#ff6b6b')} Molécula de Agua</span> <span>${dot('#2ecc71')} Ión Na+ (1 electrón de menos)</span> <span>${dot('#f1c40f')} Ión Cl- (1 electrón de más)</span>`;
+                leyenda.innerHTML = `<span>${waterIcon} Molécula de Agua</span> <span style="margin-left: 5px;">${dot('#2ecc71')} Ión Na+ (1 electrón de menos)</span> <span style="margin-left: 5px;">${dot('#f1c40f')} Ión Cl- (1 electrón de más)</span>`;
             }
         }
 
