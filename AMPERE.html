@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulación Ley de Ampère</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #333;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            background: rgba(240, 240, 245, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            user-select: none;
+            z-index: 10;
+        }
+        h2 {
+            margin-top: 0;
+            font-weight: 400;
+            font-size: 1.4rem;
+            color: #1a1a1a;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            padding-bottom: 10px;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #e67e22;
+        }
+        input[type=checkbox] {
+            accent-color: #e67e22;
+            cursor: pointer;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            justify-content: flex-start;
+            color: #555;
+        }
+        button {
+            width: 100%;
+            background: #4a6784;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #5c7f9f;
+        }
+        .readout {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            color: #555;
+        }
+        .readout span {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2980b9;
+            margin-top: 5px;
+        }
+        #color-legend {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            text-align: center;
+            color: #555;
+        }
+        .gradient-bar {
+            width: 100%;
+            height: 10px;
+            background: linear-gradient(to right, blue, cyan, green, yellow, red);
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+        }
+        #tooltip {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            pointer-events: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui-panel">
+    <h2>Ley de Ampère</h2>
+    
+    <div class="control-group">
+        <label><span>Corriente (I)</span> <strong id="valI">0.0 A</strong></label>
+        <input type="range" id="sliderI" min="-10" max="10" step="0.1" value="0">
+    </div>
+
+    <div class="control-group">
+        <label><span>Curvatura (Cable a Espira)</span> <strong id="valBend">0%</strong></label>
+        <input type="range" id="sliderBend" min="0" max="1" step="0.01" value="0">
+    </div>
+
+    <div class="control-group">
+        <label class="checkbox-label">
+            <input type="checkbox" id="checkLines" checked>
+            Mostrar líneas de campo
+        </label>
+    </div>
+    
+    <div class="control-group">
+        <label><span>Densidad de brújulas</span> <strong id="valCompassDensity">350</strong></label>
+        <input type="range" id="sliderCompassDensity" min="0" max="800" step="10" value="350">
+    </div>
+
+    <div class="control-group">
+        <label><span>Opacidad de brújulas</span> <strong id="valCompassOpacity">50%</strong></label>
+        <input type="range" id="sliderCompassOpacity" min="0" max="1" step="0.01" value="0.5">
+    </div>
+
+    <button id="btnReset">Restablecer Valores</button>
+
+    <div class="readout">
+        Campo (B) en el Punto P:
+        <span id="valB">0.00 mT</span>
+    </div>
+
+    <div id="color-legend">
+        Intensidad del Campo
+        <div class="gradient-bar"></div>
+        <div class="legend-labels">
+            <span>Débil</span>
+            <span>Fuerte</span>
+        </div>
+    </div>
+</div>
+
+<div id="tooltip">Regla de la mano derecha: el pulgar apunta en dirección de la corriente, los dedos curvan como el campo.</div>
+
+<div id="canvas-container"></div>
+
+<!-- Three.js y OrbitControls desde CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+    // --- CONFIGURACIÓN INICIAL ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(15, 12, 20);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // --- ILUMINACIÓN ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    
+    const light1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    light1.position.set(10, 20, 10);
+    scene.add(light1);
+
+    // --- VARIABLES DE FÍSICA Y ESTADO ---
+    let currentI = 0.0;
+    let bendFactor = 0.0;
+    let compassOpacity = 0.5;
+    const wireLength = 20; 
+    const mu0_approx = 1.0;
+    const R_center = (wireLength / 2) / Math.PI; 
+    let activeCurve = null;
+
+    // --- PUNTO P (REFERENCIA) ---
+    const pGeo = new THREE.SphereGeometry(0.25, 16, 16);
+    const pMat = new THREE.MeshBasicMaterial({ color: 0x3498db });
+    const meshP = new THREE.Mesh(pGeo, pMat);
+    meshP.position.set(R_center, 0, 0); 
+    scene.add(meshP);
+
+    function createTextSprite(text, color, size = 64) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, 128, 128); // Asegurar fondo transparente
+        ctx.fillStyle = color;
+        ctx.font = `bold ${size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 64, 64);
+        const tex = new THREE.CanvasTexture(canvas);
+        
+        // depthWrite: false evita el efecto de "caja blanca" o recorte de líneas por detrás
+        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.scale.set(2.5, 2.5, 2.5);
+        return sprite;
+    }
+
+    const spriteP = createTextSprite('P', '#3498db', 50);
+    spriteP.position.set(R_center + 0.6, 0.6, 0);
+    scene.add(spriteP);
+
+    // --- GEOMETRÍA DEL CABLE ---
+    class WireCurve extends THREE.Curve {
+        constructor(bend) {
+            super();
+            this.bend = bend;
+        }
+        getPoint(t, optionalTarget = new THREE.Vector3()) {
+            const normalizedT = (t - 0.5) * 2;
+            if (this.bend < 0.001) {
+                return optionalTarget.set(0, (wireLength / 2) * normalizedT, 0);
+            }
+            const maxAngle = Math.PI * this.bend; 
+            const R = (wireLength / 2) / maxAngle; 
+            const angle = maxAngle * normalizedT;
+            const x = R * (1 - Math.cos(angle));
+            const y = R * Math.sin(angle);
+            return optionalTarget.set(x, y, 0);
+        }
+    }
+
+    let wireMesh;
+    const wireMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8c4b27,
+        metalness: 0.6,
+        roughness: 0.3
+    });
+
+    function updateWire() {
+        if (wireMesh) scene.remove(wireMesh);
+        activeCurve = new WireCurve(bendFactor);
+        const geometry = new THREE.TubeGeometry(activeCurve, 64, 0.15, 16, false);
+        wireMesh = new THREE.Mesh(geometry, wireMaterial);
+        scene.add(wireMesh);
+    }
+
+    // --- CARGAS POSITIVAS EN MOVIMIENTO ---
+    const chargeCount = 60;
+    const chargeGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    const chargeMat = new THREE.MeshBasicMaterial({ color: 0xff3333 }); // Color rojo para cargas +
+    const chargeMesh = new THREE.InstancedMesh(chargeGeo, chargeMat, chargeCount);
+    scene.add(chargeMesh);
+
+    const chargeData = [];
+    for(let i = 0; i < chargeCount; i++) {
+        chargeData.push({
+            t: Math.random(),
+            angle: Math.random() * Math.PI * 2
+        });
+    }
+
+    const dummyCharge = new THREE.Object3D();
+
+    function animateCharges() {
+        if (!activeCurve || Math.abs(currentI) < 0.05) {
+            chargeMesh.visible = false;
+            return;
+        }
+        chargeMesh.visible = true;
+
+        // Velocidad en el mismo sentido que la corriente convencional
+        const speed = currentI * 0.0015; 
+
+        for(let i = 0; i < chargeCount; i++) {
+            let data = chargeData[i];
+            data.t += speed;
+            
+            if(data.t > 1) data.t -= 1;
+            if(data.t < 0) data.t += 1;
+
+            const pt = activeCurve.getPoint(data.t);
+            const tangent = activeCurve.getTangent(data.t);
+            
+            let up = new THREE.Vector3(0, 1, 0);
+            let normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+            if (normal.lengthSq() < 0.01) {
+                up.set(1, 0, 0);
+                normal.crossVectors(tangent, up).normalize();
+            }
+            
+            normal.applyAxisAngle(tangent, data.angle);
+            pt.add(normal.multiplyScalar(0.17));
+
+            dummyCharge.position.copy(pt);
+            dummyCharge.updateMatrix();
+            chargeMesh.setMatrixAt(i, dummyCharge.matrix);
+        }
+        chargeMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    // --- CÁLCULO CAMPO MAGNÉTICO ---
+    let wireSegments = [];
+    function calculateWireSegments() {
+        wireSegments = [];
+        const curve = new WireCurve(bendFactor);
+        const numSegments = 100;
+        for (let i = 0; i < numSegments; i++) {
+            const p1 = curve.getPoint(i / numSegments);
+            const p2 = curve.getPoint((i + 1) / numSegments);
+            const dl = new THREE.Vector3().subVectors(p2, p1);
+            const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+            wireSegments.push({ mid, dl });
+        }
+    }
+
+    function getBField(pos) {
+        const B = new THREE.Vector3(0, 0, 0);
+        if (Math.abs(currentI) < 0.05) return new THREE.Vector3(0, 0, 0.015);
+
+        const rVec = new THREE.Vector3();
+        const dB = new THREE.Vector3();
+
+        for (let i = 0; i < wireSegments.length; i++) {
+            const seg = wireSegments[i];
+            rVec.subVectors(pos, seg.mid);
+            const distSq = rVec.lengthSq();
+            if (distSq < 0.04) continue;
+            const dist = Math.sqrt(distSq);
+            dB.crossVectors(seg.dl, rVec).multiplyScalar((mu0_approx * currentI) / (dist * distSq));
+            B.add(dB);
+        }
+        return B;
+    }
+
+    // --- BRÚJULAS (INSTANCED MESH) ---
+    const maxCompasses = 800;
+    const compassPositions = [];
+    for (let i = 0; i < maxCompasses; i++) {
+        const r = 1.2 + Math.random() * 8;
+        const theta = Math.random() * Math.PI * 2;
+        const y = -6 + Math.random() * 12;
+        const xOffset = Math.random() > 0.7 ? R_center * Math.random() : 0;
+        compassPositions.push(new THREE.Vector3(r * Math.cos(theta) + xOffset, y, r * Math.sin(theta)));
+    }
+
+    const dummy = new THREE.Object3D();
+    const coneN = new THREE.ConeGeometry(0.15, 0.8, 8); 
+    coneN.translate(0, 0.4, 0);
+    const coneS = new THREE.ConeGeometry(0.15, 0.8, 8);
+    coneS.rotateX(Math.PI);
+    coneS.translate(0, -0.4, 0);
+    
+    const matN = new THREE.MeshStandardMaterial({ color: 0xe74c3c, emissive: 0x400000, transparent: true, opacity: compassOpacity, depthWrite: false });
+    const matS = new THREE.MeshStandardMaterial({ color: 0xdcdcdc, emissive: 0x222222, transparent: true, opacity: compassOpacity, depthWrite: false });
+    
+    const instMeshN = new THREE.InstancedMesh(coneN, matN, maxCompasses);
+    const instMeshS = new THREE.InstancedMesh(coneS, matS, maxCompasses);
+    instMeshN.count = 350; 
+    instMeshS.count = 350;
+    scene.add(instMeshN);
+    scene.add(instMeshS);
+
+    const upVector = new THREE.Vector3(0, 1, 0);
+
+    function updateCompasses() {
+        for (let i = 0; i < instMeshN.count; i++) {
+            const pos = compassPositions[i];
+            const B = getBField(pos);
+            const mag = B.length();
+            B.normalize();
+            
+            let visualScale = Math.min(0.8, Math.max(0.3, Math.log10(mag * 20 + 1))); 
+            if (Math.abs(currentI) < 0.05) visualScale = 0.4;
+
+            dummy.position.copy(pos);
+            dummy.quaternion.setFromUnitVectors(upVector, B);
+            dummy.scale.set(visualScale, visualScale, visualScale);
+            dummy.updateMatrix();
+            
+            instMeshN.setMatrixAt(i, dummy.matrix);
+            instMeshS.setMatrixAt(i, dummy.matrix);
+        }
+        instMeshN.instanceMatrix.needsUpdate = true;
+        instMeshS.instanceMatrix.needsUpdate = true;
+    }
+
+    // --- INTEGRACIÓN LÍNEAS ---
+    function rk4Step(pos, stepSize, sign) {
+        const getDir = (p) => {
+            const b = getBField(p);
+            if (b.lengthSq() < 1e-8) return new THREE.Vector3(0,0,0);
+            return b.normalize().multiplyScalar(sign);
+        };
+        const k1 = getDir(pos);
+        if (k1.lengthSq() === 0) return null;
+        const p2 = pos.clone().add(k1.clone().multiplyScalar(stepSize * 0.5));
+        const k2 = getDir(p2);
+        const p3 = pos.clone().add(k2.clone().multiplyScalar(stepSize * 0.5));
+        const k3 = getDir(p3);
+        const p4 = pos.clone().add(k3.clone().multiplyScalar(stepSize));
+        const k4 = getDir(p4);
+        const move = k1.add(k2.multiplyScalar(2)).add(k3.multiplyScalar(2)).add(k4).multiplyScalar(stepSize / 6);
+        return pos.clone().add(move);
+    }
+
+    let fieldLinesGroup = new THREE.Group();
+    scene.add(fieldLinesGroup);
+
+    function updateFieldLines() {
+        while(fieldLinesGroup.children.length > 0){ 
+            fieldLinesGroup.remove(fieldLinesGroup.children[0]); 
+        }
+        
+        if (!document.getElementById('checkLines').checked || Math.abs(currentI) < 0.05) return;
+
+        const seeds = [];
+        const curve = new WireCurve(bendFactor);
+        const end1 = curve.getPoint(0);
+        const end2 = curve.getPoint(1);
+        const centerX = bendFactor * R_center; 
+
+        for (let r = 0.8; r <= 8.5; r += 1.2) {
+            // Eje X siempre presente
+            seeds.push(new THREE.Vector3(centerX + r, 0, 0));
+            seeds.push(new THREE.Vector3(centerX - r, 0, 0));
+            
+            // Simetría dinámica: al doblar la espira, las semillas Y pasan a ser semillas Z
+            // Esto evita las líneas erráticas que se iban al infinito.
+            const yOffset = 3 * (1 - bendFactor);
+            const zOffset = r * bendFactor;
+            
+            if (yOffset > 0.1) {
+                seeds.push(new THREE.Vector3(centerX + r, yOffset, 0));
+                seeds.push(new THREE.Vector3(centerX - r, yOffset, 0));
+                seeds.push(new THREE.Vector3(centerX + r, -yOffset, 0));
+                seeds.push(new THREE.Vector3(centerX - r, -yOffset, 0));
+            }
+            if (zOffset > 0.1) {
+                seeds.push(new THREE.Vector3(centerX, 0, zOffset));
+                seeds.push(new THREE.Vector3(centerX, 0, -zOffset));
+            }
+        }
+
+        const steps = 400; // Un poco más largo para asegurar que los círculos grandes cierren bien
+        const stepSize = 0.15;
+        const colorObj = new THREE.Color();
+        const sign = currentI > 0 ? 1 : -1;
+        const maxAbsoluteMag = (mu0_approx * 10.0) / R_center; 
+
+        seeds.forEach(seed => {
+            const positions = [];
+            const colors = [];
+            let currentPos = seed.clone();
+            
+            for (let i = 0; i < steps; i++) {
+                if (currentPos.distanceTo(end1) < 0.6 || currentPos.distanceTo(end2) < 0.6) break;
+                if (currentPos.length() > 20) break;
+
+                const B = getBField(currentPos);
+                const mag = B.length();
+                if (mag < 0.001) break;
+
+                positions.push(currentPos.x, currentPos.y, currentPos.z);
+                
+                const mappedMag = Math.min(1, mag / maxAbsoluteMag); 
+                const hue = 0.66 * (1 - mappedMag);
+                colorObj.setHSL(hue, 1.0, 0.45);
+                colors.push(colorObj.r, colorObj.g, colorObj.b);
+
+                const nextPos = rk4Step(currentPos, stepSize, sign);
+                if (!nextPos) break;
+                currentPos = nextPos;
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            
+            const mat = new THREE.LineBasicMaterial({ 
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9,
+                linewidth: 2 
+            });
+            
+            fieldLinesGroup.add(new THREE.Line(geo, mat));
+        });
+    }
+
+    // --- ACTUALIZACIÓN Y EVENTOS ---
+    function syncSimulation() {
+        calculateWireSegments();
+        updateWire();
+        updateCompasses();
+        updateFieldLines();
+        
+        const bMagnitude = getBField(meshP.position).length();
+        document.getElementById('valB').innerText = (bMagnitude * 10).toFixed(2) + " mT";
+    }
+
+    document.getElementById('sliderI').addEventListener('input', (e) => {
+        currentI = parseFloat(e.target.value);
+        document.getElementById('valI').innerText = currentI.toFixed(1) + " A";
+        syncSimulation();
+    });
+
+    document.getElementById('sliderBend').addEventListener('input', (e) => {
+        bendFactor = parseFloat(e.target.value);
+        document.getElementById('valBend').innerText = Math.round(bendFactor * 100) + "%";
+        syncSimulation();
+    });
+
+    document.getElementById('checkLines').addEventListener('change', syncSimulation);
+
+    document.getElementById('sliderCompassDensity').addEventListener('input', (e) => {
+        const count = parseInt(e.target.value);
+        document.getElementById('valCompassDensity').innerText = count;
+        instMeshN.count = count;
+        instMeshS.count = count;
+        syncSimulation();
+    });
+
+    document.getElementById('sliderCompassOpacity').addEventListener('input', (e) => {
+        compassOpacity = parseFloat(e.target.value);
+        document.getElementById('valCompassOpacity').innerText = Math.round(compassOpacity * 100) + "%";
+        
+        if (compassOpacity === 0) {
+            instMeshN.visible = false;
+            instMeshS.visible = false;
+        } else {
+            instMeshN.visible = true;
+            instMeshS.visible = true;
+            matN.opacity = compassOpacity;
+            matS.opacity = compassOpacity;
+        }
+    });
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+        document.getElementById('sliderI').value = 0;
+        document.getElementById('sliderBend').value = 0;
+        document.getElementById('sliderCompassDensity').value = 350;
+        document.getElementById('sliderCompassOpacity').value = 0.5;
+        
+        document.getElementById('valI').innerText = "0.0 A";
+        document.getElementById('valBend').innerText = "0%";
+        document.getElementById('valCompassDensity').innerText = "350";
+        document.getElementById('valCompassOpacity').innerText = "50%";
+        document.getElementById('checkLines').checked = true;
+        
+        currentI = 0.0;
+        bendFactor = 0.0;
+        
+        compassOpacity = 0.5;
+        matN.opacity = compassOpacity;
+        matS.opacity = compassOpacity;
+        instMeshN.visible = true;
+        instMeshS.visible = true;
+
+        instMeshN.count = 350;
+        instMeshS.count = 350;
+        
+        camera.position.set(15, 12, 20);
+        controls.target.set(0,0,0);
+        
+        syncSimulation();
+    });
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    syncSimulation();
+
+    // --- LOOP DE ANIMACIÓN ---
+    function animate() {
+        requestAnimationFrame(animate);
+        animateCharges(); 
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+</script>
+</body>
+</html>
