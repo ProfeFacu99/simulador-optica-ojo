@@ -852,13 +852,21 @@
         window.addEventListener('touchmove', onMove, {passive: false});
         window.addEventListener('touchend', onUp);
 
-        window.onload = () => {
-            setTimeout(() => {
-                resize();
-                initApp();
-                render();
-            }, 50);
-        };
+        // --- INICIALIZACIÓN ROBUSTA PARA IFRAMES ---
+        function arrancarSimulador() {
+            // Si el contenedor todavía reporta ancho 0 (típico en iframes que cargan asíncronamente),
+            // volvemos a intentar en el siguiente ciclo de renderizado.
+            if (canvas.parentElement.clientWidth === 0) {
+                requestAnimationFrame(arrancarSimulador);
+                return;
+            }
+            // Cuando ya tenemos un ancho real, arrancamos normalmente
+            resize();
+            initApp();
+            render();
+        }
+
+        window.addEventListener('load', arrancarSimulador);
     </script>
 </body>
 </html>
