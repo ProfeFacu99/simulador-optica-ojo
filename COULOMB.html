@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador Ley de Coulomb - V16 (Etiquetas µC)</title>
+    <title>Simulador Ley de Coulomb - V17 (Física Cuidada)</title>
     <style>
         :root {
             --bg-color: #fdfdfd;
@@ -409,7 +409,7 @@
             btnOpenInfo.style.display = 'none';
         });
 
-        let currentMode = 'atomic'; // 'atomic' o 'macro'
+        let currentMode = 'atomic'; 
         let width, height, centerY;
         let charges = [];
         let draggingCharge = null;
@@ -464,7 +464,7 @@
             } else {
                 btnTabMacro.classList.add('active');
                 btnTabAtomic.classList.remove('active');
-                controlsMacro.style.display = 'flex'; // Usamos el container macro
+                controlsMacro.style.display = 'flex'; 
                 controlsAtomic.style.display = 'none';
                 modeTitleDisplay.textContent = "Interacción Macroscópica";
                 
@@ -611,14 +611,22 @@
         function drawArrowAndText(x, y, forceValue, directionSign, color, textYOffset, arrowYOffset = 0) {
             let lengthPx = forceValue * PIXELS_PER_NEWTON;
             
+            // Garantizar una mínima línea si existe fuerza, pero no exagerada
             if (forceValue > 0 && lengthPx < 2) lengthPx = 2; 
             
+            // EL TOPE: Previene que la flecha atraviese la pantalla a distancias ínfimas
+            let maxLen = Math.min(width * 0.4, 400); 
+            if (lengthPx > maxLen) {
+                lengthPx = maxLen;
+            }
+
             let endX = x + (lengthPx * directionSign);
             let actualY = y + arrowYOffset;
 
             let headLen = Math.min(14, Math.max(3, lengthPx * 0.4));
             let headWidth = Math.min(7, Math.max(2, lengthPx * 0.2));
 
+            // Retraemos el extremo del tallo para que no sobresalga por delante del triángulo
             let lineEndX = endX - (headLen * 0.5 * directionSign);
 
             ctx.beginPath();
@@ -639,6 +647,7 @@
             ctx.font = 'bold 14px sans-serif';
             ctx.textAlign = 'center';
             
+            // Posicionar el texto inteligentemente considerando si fue "topado" o no
             let textX = x + ((lengthPx * directionSign) / 2);
             if (lengthPx < 60) {
                 textX = x + (60 * directionSign);
@@ -676,7 +685,6 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // Lógica para añadir "µC" dentro de la carga en modo Macroscópico
             if (currentMode === 'macro') {
                 ctx.font = 'bold 18px sans-serif';
                 let labelText = charge.q > 0 ? `+${charge.q} µC` : `${charge.q} µC`;
