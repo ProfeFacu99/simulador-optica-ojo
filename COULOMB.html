@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador Ley de Coulomb - V15 (Nota Ocultable)</title>
+    <title>Simulador Ley de Coulomb - V16 (Etiquetas µC)</title>
     <style>
         :root {
             --bg-color: #fdfdfd;
@@ -508,12 +508,6 @@
                     return getIntensityColor(this.q);
                 }
             }
-
-            getSignString() {
-                if (this.q > 0) return `+${this.q}`;
-                if (this.q < 0) return `${this.q}`;
-                return '0';
-            }
         }
 
         function initApp() {
@@ -679,11 +673,19 @@
             ctx.stroke();
 
             ctx.fillStyle = currentMode === 'atomic' ? 'rgba(255, 255, 255, 0.9)' : (charge.q === 0 ? '#495057' : '#ffffff');
-            ctx.font = 'bold 26px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            ctx.fillText(charge.q > 0 ? `+${charge.q}` : charge.q, charge.x, charge.y);
+            // Lógica para añadir "µC" dentro de la carga en modo Macroscópico
+            if (currentMode === 'macro') {
+                ctx.font = 'bold 18px sans-serif';
+                let labelText = charge.q > 0 ? `+${charge.q} µC` : `${charge.q} µC`;
+                if (charge.q === 0) labelText = "0 µC";
+                ctx.fillText(labelText, charge.x, charge.y);
+            } else {
+                ctx.font = 'bold 26px sans-serif';
+                ctx.fillText(charge.q > 0 ? `+${charge.q}` : charge.q, charge.x, charge.y);
+            }
 
             ctx.fillStyle = COLORS.textMain;
             ctx.font = 'italic bold 20px serif';
