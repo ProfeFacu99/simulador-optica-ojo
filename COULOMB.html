@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador Ley de Coulomb - V14 (Ajustes Didácticos)</title>
+    <title>Simulador Ley de Coulomb - V15 (Nota Ocultable)</title>
     <style>
         :root {
             --bg-color: #fdfdfd;
@@ -83,7 +83,7 @@
             outline: none;
         }
 
-        /* INTERFAZ FLOTANTE (Dinámica según pestaña) */
+        /* CONTROLES FLOTANTES */
         .floating-controls {
             position: absolute;
             top: 20px;
@@ -118,14 +118,70 @@
             accent-color: var(--text-main);
         }
         
+        /* CAJA DE INFORMACIÓN OCULTABLE */
         .info-box {
             background: #eef2f5;
-            padding: 10px;
+            padding: 12px;
             border-radius: 6px;
             border-left: 4px solid #3a86ff;
             font-size: 0.85rem;
             color: #495057;
             line-height: 1.4;
+            position: relative;
+        }
+
+        .close-info-btn {
+            position: absolute;
+            top: 5px;
+            right: 8px;
+            background: none;
+            border: none;
+            font-size: 1.4rem;
+            line-height: 1;
+            cursor: pointer;
+            color: #8d99ae;
+            transition: color 0.2s;
+        }
+
+        .close-info-btn:hover {
+            color: var(--color-pos);
+        }
+
+        .info-toggle-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--panel-bg);
+            color: var(--text-main);
+            border: 2px solid var(--grid-color);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            font-size: 1.2rem;
+            font-weight: bold;
+            font-style: italic;
+            font-family: serif;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .info-toggle-btn:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.05);
+            color: #3a86ff;
+            border-color: #3a86ff;
+        }
+
+        /* CONTENEDOR ESPECÍFICO PARA MACRO */
+        .macro-controls-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
 
         /* PANEL INFERIOR */
@@ -257,6 +313,10 @@
                 padding: 10px;
                 max-width: 250px;
             }
+            .macro-controls-container {
+                top: 10px;
+                right: 10px;
+            }
             .tab-btn {
                 padding: 10px;
                 font-size: 0.9rem;
@@ -279,11 +339,15 @@
             </label>
         </div>
 
-        <!-- Controles Nivel Macroscópico -->
-        <div class="floating-controls" id="controlsMacro" style="display: none;">
-            <div class="info-box">
-                <strong>Nota de escala:</strong><br>
-                -1 µC equivale a la carga de más de 6 billones de electrones juntos (6.24 × 10¹² e⁻). Es una cantidad de carga realista en contextos cotidianos de electrostática (frotar un globo en el pelo, la descarga al dar la mano, etc.).
+        <!-- Controles Nivel Macroscópico con Toggle -->
+        <div class="macro-controls-container" id="controlsMacro" style="display: none;">
+            <button id="btnOpenInfo" class="info-toggle-btn" style="display: none;" title="Mostrar nota de escala">i</button>
+            <div id="infoBoxWrap" class="floating-controls" style="position: static; margin: 0; width: 320px;">
+                <div class="info-box">
+                    <button id="btnCloseInfo" class="close-info-btn" title="Ocultar nota">&times;</button>
+                    <strong>Nota de escala:</strong><br>
+                    -1 µC equivale a la carga de más de 6 billones de electrones juntos (6.24 × 10¹² e⁻). Es una cantidad de carga realista en contextos cotidianos de electrostática (frotar un globo en el pelo, la descarga al dar la mano, etc.).
+                </div>
             </div>
         </div>
 
@@ -329,6 +393,21 @@
         const btnTabMacro = document.getElementById('btnTabMacro');
         const controlsAtomic = document.getElementById('controlsAtomic');
         const controlsMacro = document.getElementById('controlsMacro');
+
+        // Lógica para abrir/cerrar nota de escala
+        const btnOpenInfo = document.getElementById('btnOpenInfo');
+        const btnCloseInfo = document.getElementById('btnCloseInfo');
+        const infoBoxWrap = document.getElementById('infoBoxWrap');
+
+        btnCloseInfo.addEventListener('click', () => {
+            infoBoxWrap.style.display = 'none';
+            btnOpenInfo.style.display = 'flex';
+        });
+
+        btnOpenInfo.addEventListener('click', () => {
+            infoBoxWrap.style.display = 'flex';
+            btnOpenInfo.style.display = 'none';
+        });
 
         let currentMode = 'atomic'; // 'atomic' o 'macro'
         let width, height, centerY;
@@ -385,7 +464,7 @@
             } else {
                 btnTabMacro.classList.add('active');
                 btnTabAtomic.classList.remove('active');
-                controlsMacro.style.display = 'flex';
+                controlsMacro.style.display = 'flex'; // Usamos el container macro
                 controlsAtomic.style.display = 'none';
                 modeTitleDisplay.textContent = "Interacción Macroscópica";
                 
@@ -562,7 +641,6 @@
             ctx.fillStyle = color;
             ctx.fill();
 
-            // Dibujar el texto tanto para atómico ("Fuerza eléctrica") como para macro (F = ... N)
             ctx.fillStyle = color;
             ctx.font = 'bold 14px sans-serif';
             ctx.textAlign = 'center';
