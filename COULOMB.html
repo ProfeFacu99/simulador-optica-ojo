@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Ley de Coulomb - V14 (Ajustes Didácticos)</title>
+    <style>
+        :root {
+            --bg-color: #fdfdfd;
+            --panel-bg: #ffffff;
+            --text-main: #2b2d42;
+            --color-pos: #ef233c; 
+            --color-neg: #3a86ff; 
+            --color-neu: #adb5bd; 
+            --color-force1: #27ae60; 
+            --color-force2: #117864; 
+            --grid-color: #ced4da;
+            --shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
+            --border-radius: 10px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: grid;
+            grid-template-rows: auto 1fr auto; 
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* PESTAÑAS (TABS) SUPERIORES */
+        .tabs-container {
+            display: flex;
+            background: var(--panel-bg);
+            border-bottom: 2px solid var(--grid-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            z-index: 20;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--text-main);
+            background: #f8f9fa;
+            border: none;
+            border-bottom: 4px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: #e9ecef;
+        }
+
+        .tab-btn.active {
+            background: var(--panel-bg);
+            border-bottom: 4px solid var(--text-main);
+            color: var(--text-main);
+        }
+
+        .sim-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; 
+        }
+
+        #simCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+            outline: none;
+        }
+
+        /* INTERFAZ FLOTANTE (Dinámica según pestaña) */
+        .floating-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--grid-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 50;
+            max-width: 320px;
+        }
+
+        .floating-controls label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .floating-controls input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--text-main);
+        }
+        
+        .info-box {
+            background: #eef2f5;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #3a86ff;
+            font-size: 0.85rem;
+            color: #495057;
+            line-height: 1.4;
+        }
+
+        /* PANEL INFERIOR */
+        .bottom-banner {
+            background-color: var(--panel-bg);
+            box-shadow: var(--shadow);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 2px solid var(--grid-color);
+            width: 100%;
+            z-index: 10;
+        }
+
+        .control-box {
+            flex: 1;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-box.left { text-align: left; }
+        .control-box.right { text-align: right; }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .control-box.right .control-header {
+            flex-direction: row-reverse;
+        }
+
+        .charge-val {
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+
+        .status-text {
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.2;
+            text-wrap: balance;
+        }
+
+        /* SLIDERS */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--grid-color);
+            outline: none;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--text-main);
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover,
+        input[type="range"]::-moz-range-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        .info-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 2rem;
+            text-align: center;
+        }
+
+        .info-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 0.2rem;
+        }
+
+        .info-dist {
+            font-size: 1.1rem;
+            color: var(--text-main);
+        }
+
+        @media (max-width: 768px) {
+            .bottom-banner {
+                flex-direction: column;
+                gap: 1.5rem;
+                padding: 1rem;
+                overflow-y: auto;
+                max-height: 40vh;
+            }
+            .info-center {
+                order: -1; 
+                padding: 0;
+            }
+            .control-box {
+                max-width: 100%;
+                width: 100%;
+            }
+            .floating-controls {
+                top: 10px;
+                right: 10px;
+                padding: 10px;
+                max-width: 250px;
+            }
+            .tab-btn {
+                padding: 10px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="tabs-container">
+        <button class="tab-btn active" id="btnTabAtomic" onclick="setMode('atomic')">Nivel Atómico (Cargas Elementales)</button>
+        <button class="tab-btn" id="btnTabMacro" onclick="setMode('macro')">Nivel Macroscópico (Microcoulombs)</button>
+    </div>
+
+    <main class="sim-area">
+        <!-- Controles Nivel Atómico -->
+        <div class="floating-controls" id="controlsAtomic">
+            <label>
+                <input type="checkbox" id="chkElectron"> Interponer un electrón de prueba
+            </label>
+        </div>
+
+        <!-- Controles Nivel Macroscópico -->
+        <div class="floating-controls" id="controlsMacro" style="display: none;">
+            <div class="info-box">
+                <strong>Nota de escala:</strong><br>
+                -1 µC equivale a la carga de más de 6 billones de electrones juntos (6.24 × 10¹² e⁻). Es una cantidad de carga realista en contextos cotidianos de electrostática (frotar un globo en el pelo, la descarga al dar la mano, etc.).
+            </div>
+        </div>
+
+        <canvas id="simCanvas" tabindex="0"></canvas>
+    </main>
+
+    <footer class="bottom-banner">
+        <div class="control-box left">
+            <div class="control-header">
+                <span>Carga q₁ (Izquierda)</span>
+                <span id="valQ1" class="charge-val">0</span>
+            </div>
+            <input type="range" id="sliderQ1" min="-5" max="5" step="1" value="3">
+            <span id="statusQ1" class="status-text">Calculando...</span>
+        </div>
+
+        <div class="info-center">
+            <div class="info-title" id="modeTitleDisplay">Interacción Atómica</div>
+            <div class="info-dist" id="distDisplay">Distancia: 0 m</div>
+        </div>
+
+        <div class="control-box right">
+            <div class="control-header">
+                <span>Carga q₂ (Derecha)</span>
+                <span id="valQ2" class="charge-val">0</span>
+            </div>
+            <input type="range" id="sliderQ2" min="-5" max="5" step="1" value="-3">
+            <span id="statusQ2" class="status-text">Calculando...</span>
+        </div>
+    </footer>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const sliderQ1 = document.getElementById('sliderQ1');
+        const sliderQ2 = document.getElementById('sliderQ2');
+        const distDisplay = document.getElementById('distDisplay');
+        const modeTitleDisplay = document.getElementById('modeTitleDisplay');
+        
+        const chkElectron = document.getElementById('chkElectron');
+        
+        const btnTabAtomic = document.getElementById('btnTabAtomic');
+        const btnTabMacro = document.getElementById('btnTabMacro');
+        const controlsAtomic = document.getElementById('controlsAtomic');
+        const controlsMacro = document.getElementById('controlsMacro');
+
+        let currentMode = 'atomic'; // 'atomic' o 'macro'
+        let width, height, centerY;
+        let charges = [];
+        let draggingCharge = null;
+        
+        const CHARGE_RADIUS = 38;
+        const MIN_DISTANCE = CHARGE_RADIUS * 2.2;
+        const PIXELS_PER_METER = 120; 
+        
+        // --- CONSTANTES ---
+        const K_MACRO_SIM = 360; 
+        const PIXELS_PER_NEWTON = 0.3; 
+
+        const COLORS = {
+            pos: [239, 35, 60],     // #ef233c
+            neg: [58, 134, 255],    // #3a86ff
+            neu: [173, 181, 189],   // #adb5bd
+            force1: '#27ae60',
+            force2: '#117864',
+            track: '#e9ecef',
+            textMain: '#2b2d42'
+        };
+
+        function getIntensityColor(qValue) {
+            let factor = Math.abs(qValue) / 5; 
+            let targetColor = qValue > 0 ? COLORS.pos : COLORS.neg;
+            let baseColor = COLORS.neu;
+            
+            if (qValue === 0) return `rgb(${baseColor[0]}, ${baseColor[1]}, ${baseColor[2]})`;
+
+            let r = Math.round(baseColor[0] + factor * (targetColor[0] - baseColor[0]));
+            let g = Math.round(baseColor[1] + factor * (targetColor[1] - baseColor[1]));
+            let b = Math.round(baseColor[2] + factor * (targetColor[2] - baseColor[2]));
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function getStaticColor(qValue) {
+            if (qValue > 0) return `rgb(${COLORS.pos.join(',')})`;
+            if (qValue < 0) return `rgb(${COLORS.neg.join(',')})`;
+            return `rgb(${COLORS.neu.join(',')})`;
+        }
+
+        window.setMode = function(mode) {
+            currentMode = mode;
+            
+            if (mode === 'atomic') {
+                btnTabAtomic.classList.add('active');
+                btnTabMacro.classList.remove('active');
+                controlsAtomic.style.display = 'flex';
+                controlsMacro.style.display = 'none';
+                modeTitleDisplay.textContent = "Interacción Atómica";
+            } else {
+                btnTabMacro.classList.add('active');
+                btnTabAtomic.classList.remove('active');
+                controlsMacro.style.display = 'flex';
+                controlsAtomic.style.display = 'none';
+                modeTitleDisplay.textContent = "Interacción Macroscópica";
+                
+                chkElectron.checked = false;
+                if (charges.length > 2) charges.pop();
+                snapToGrid(charges[0]);
+                snapToGrid(charges[1]);
+            }
+            
+            updateSliderVisuals(sliderQ1, true);
+            updateSliderVisuals(sliderQ2, false);
+        };
+
+        function resize() {
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+            centerY = height / 2 - 10; 
+            
+            charges.forEach(c => {
+                c.y = centerY;
+                if (c.x > width - CHARGE_RADIUS) c.x = width - CHARGE_RADIUS;
+                if (!(currentMode === 'atomic' && chkElectron.checked)) snapToGrid(c); 
+            });
+        }
+        window.addEventListener('resize', resize);
+
+        class Charge {
+            constructor(x, q, isElectron = false) {
+                this.x = x;
+                this.y = centerY;
+                this.q = q;
+                this.isElectron = isElectron;
+            }
+
+            getColor() {
+                if (currentMode === 'atomic' || this.isElectron) {
+                    return getStaticColor(this.q);
+                } else {
+                    return getIntensityColor(this.q);
+                }
+            }
+
+            getSignString() {
+                if (this.q > 0) return `+${this.q}`;
+                if (this.q < 0) return `${this.q}`;
+                return '0';
+            }
+        }
+
+        function initApp() {
+            charges = [
+                new Charge(width/2 - 1.5 * PIXELS_PER_METER, parseInt(sliderQ1.value)),
+                new Charge(width/2 + 1.5 * PIXELS_PER_METER, parseInt(sliderQ2.value))
+            ];
+            setMode('atomic');
+            charges.forEach(c => snapToGrid(c));
+        }
+
+        chkElectron.addEventListener('change', (e) => {
+            if (e.target.checked && currentMode === 'atomic') {
+                let centerPx = width / 2;
+                charges.push(new Charge(centerPx, -1, true));
+            } else {
+                if (charges.length > 2) charges.pop();
+                snapToGrid(charges[0]);
+                snapToGrid(charges[1]);
+            }
+        });
+
+        function snapToGrid(charge) {
+            let centerPx = width / 2; 
+            let halfMeterPx = PIXELS_PER_METER / 2; 
+            
+            let diff = charge.x - centerPx;
+            let halfMetersCount = Math.round(diff / halfMeterPx);
+            let snappedPx = centerPx + (halfMetersCount * halfMeterPx);
+
+            if (snappedPx < CHARGE_RADIUS + 20) snappedPx = CHARGE_RADIUS + 20;
+            if (snappedPx > width - CHARGE_RADIUS - 20) snappedPx = width - CHARGE_RADIUS - 20;
+
+            charges.forEach(c => {
+                if (c !== charge) {
+                    if (charge.x < c.x && snappedPx > c.x - MIN_DISTANCE) snappedPx = c.x - MIN_DISTANCE;
+                    if (charge.x > c.x && snappedPx < c.x + MIN_DISTANCE) snappedPx = c.x + MIN_DISTANCE;
+                }
+            });
+
+            charge.x = snappedPx;
+        }
+
+        function updateSliderVisuals(slider, isLeft) {
+            const val = parseInt(slider.value);
+            const percentage = ((val + 5) / 10) * 100;
+            const center = 50; 
+            
+            let hexColor = COLORS.track;
+            if (val > 0) hexColor = `rgb(${COLORS.pos.join(',')})`;
+            if (val < 0) hexColor = `rgb(${COLORS.neg.join(',')})`;
+
+            if (val > 0) {
+                slider.style.background = `linear-gradient(to right, ${COLORS.track} 0%, ${COLORS.track} ${center}%, ${hexColor} ${center}%, ${hexColor} ${percentage}%, ${COLORS.track} ${percentage}%, ${COLORS.track} 100%)`;
+            } else if (val < 0) {
+                slider.style.background = `linear-gradient(to right, ${COLORS.track} 0%, ${COLORS.track} ${percentage}%, ${hexColor} ${percentage}%, ${hexColor} ${center}%, ${COLORS.track} ${center}%, ${COLORS.track} 100%)`;
+            } else {
+                slider.style.background = COLORS.track;
+            }
+
+            const valEl = document.getElementById(isLeft ? 'valQ1' : 'valQ2');
+            const statusEl = document.getElementById(isLeft ? 'statusQ1' : 'statusQ2');
+            
+            let unitStr = currentMode === 'macro' ? ' µC' : ' e';
+            valEl.textContent = (val > 0 ? `+${val}` : val) + unitStr;
+            valEl.style.color = val === 0 ? `rgb(${COLORS.neu.join(',')})` : hexColor;
+
+            if (val > 0) {
+                statusEl.textContent = currentMode === 'atomic' ? "Déficit de electrones" : "Carga Positiva";
+                statusEl.style.color = `rgb(${COLORS.pos.join(',')})`;
+            } else if (val < 0) {
+                statusEl.textContent = currentMode === 'atomic' ? "Exceso de electrones" : "Carga Negativa";
+                statusEl.style.color = `rgb(${COLORS.neg.join(',')})`;
+            } else {
+                statusEl.textContent = "Neutro (misma cantidad de electrones que protones)";
+                statusEl.style.color = `rgb(${COLORS.neu.join(',')})`;
+            }
+        }
+
+        sliderQ1.addEventListener('input', (e) => {
+            charges[0].q = parseInt(e.target.value);
+            updateSliderVisuals(e.target, true);
+        });
+        
+        sliderQ2.addEventListener('input', (e) => {
+            charges[1].q = parseInt(e.target.value);
+            updateSliderVisuals(e.target, false);
+        });
+
+        function calculateMacroForce(q1, q2, distMeters) {
+            if (q1 === 0 || q2 === 0) return 0;
+            return K_MACRO_SIM * (Math.abs(q1 * q2)) / (distMeters * distMeters);
+        }
+
+        function formatForceText(fNewtons) {
+            if (currentMode === 'atomic') return "Fuerza eléctrica"; 
+            if (fNewtons === 0) return "F = 0 N";
+            return `F = ${fNewtons.toFixed(1)} N`;
+        }
+
+        function drawArrowAndText(x, y, forceValue, directionSign, color, textYOffset, arrowYOffset = 0) {
+            let lengthPx = forceValue * PIXELS_PER_NEWTON;
+            
+            if (forceValue > 0 && lengthPx < 2) lengthPx = 2; 
+            
+            let endX = x + (lengthPx * directionSign);
+            let actualY = y + arrowYOffset;
+
+            let headLen = Math.min(14, Math.max(3, lengthPx * 0.4));
+            let headWidth = Math.min(7, Math.max(2, lengthPx * 0.2));
+
+            let lineEndX = endX - (headLen * 0.5 * directionSign);
+
+            ctx.beginPath();
+            ctx.moveTo(x, actualY);
+            ctx.lineTo(lineEndX, actualY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3.5; 
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(endX, actualY);
+            ctx.lineTo(endX - (headLen * directionSign), actualY - headWidth);
+            ctx.lineTo(endX - (headLen * directionSign), actualY + headWidth);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // Dibujar el texto tanto para atómico ("Fuerza eléctrica") como para macro (F = ... N)
+            ctx.fillStyle = color;
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            
+            let textX = x + ((lengthPx * directionSign) / 2);
+            if (lengthPx < 60) {
+                textX = x + (60 * directionSign);
+            }
+            ctx.fillText(formatForceText(forceValue), textX, actualY + textYOffset);
+        }
+
+        function drawCharge(charge, index) {
+            if (charge.isElectron) {
+                ctx.beginPath();
+                ctx.arc(charge.x, charge.y, CHARGE_RADIUS * 0.75, 0, Math.PI * 2);
+                ctx.fillStyle = getStaticColor(-1);
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#fff';
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText("e⁻", charge.x, charge.y + 2);
+                return; 
+            }
+
+            ctx.beginPath();
+            ctx.arc(charge.x, charge.y, CHARGE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = charge.getColor();
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = currentMode === 'atomic' ? '#fff' : '#e9ecef';
+            ctx.stroke();
+
+            ctx.fillStyle = currentMode === 'atomic' ? 'rgba(255, 255, 255, 0.9)' : (charge.q === 0 ? '#495057' : '#ffffff');
+            ctx.font = 'bold 26px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.fillText(charge.q > 0 ? `+${charge.q}` : charge.q, charge.x, charge.y);
+
+            ctx.fillStyle = COLORS.textMain;
+            ctx.font = 'italic bold 20px serif';
+            ctx.textAlign = 'center';
+            let label = index === 0 ? 'q₁' : 'q₂';
+            ctx.fillText(label, charge.x - CHARGE_RADIUS - 5, charge.y - CHARGE_RADIUS - 10);
+
+            if (currentMode === 'atomic' && charge.q !== 0) {
+                let numSymbols = Math.abs(charge.q);
+                let symbol = charge.q > 0 ? '+' : 'e';
+                let innerRadius = 22; 
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.font = 'bold 14px monospace';
+
+                for (let i = 0; i < numSymbols; i++) {
+                    let angle = (i / numSymbols) * Math.PI * 2 - Math.PI / 2; 
+                    let px = charge.x + Math.cos(angle) * innerRadius;
+                    let py = charge.y + Math.sin(angle) * innerRadius;
+                    ctx.fillText(symbol, px, py + 1); 
+                }
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+
+            let rulerY = centerY + CHARGE_RADIUS + 50; 
+            ctx.beginPath();
+            ctx.moveTo(20, rulerY);
+            ctx.lineTo(width - 20, rulerY);
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--grid-color');
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.textAlign = 'center';
+            let centerPx = width / 2;
+            for (let m = -20; m <= 20; m += 0.5) {
+                let px = centerPx + (m * PIXELS_PER_METER);
+                if (px > 0 && px < width) {
+                    let isWholeMeter = (m % 1 === 0);
+                    let tickHeight = isWholeMeter ? 16 : 8;
+                    
+                    ctx.fillStyle = '#adb5bd';
+                    ctx.fillRect(px - 1, rulerY - tickHeight / 2, 2, tickHeight);
+                    
+                    if (isWholeMeter) {
+                        ctx.font = 'bold 13px sans-serif';
+                        ctx.fillText(m + 'm', px, rulerY + 25);
+                    } else {
+                        ctx.font = '11px sans-serif';
+                        ctx.fillText(m.toString().replace('.', ',') + 'm', px, rulerY + 22);
+                    }
+                }
+            }
+
+            let c1 = charges[0];
+            let c2 = charges[1];
+            let distPx = Math.abs(c2.x - c1.x);
+            let distMeters = distPx / PIXELS_PER_METER;
+            
+            if (currentMode === 'atomic' && chkElectron.checked) {
+                distDisplay.textContent = `Distancia entre q₁ y q₂: ${distMeters.toFixed(3).replace('.', ',')} m`;
+            } else {
+                distDisplay.textContent = `Distancia: ${distMeters.toFixed(2).replace('.', ',')} m`;
+            }
+
+            charges.forEach((charge, index) => drawCharge(charge, index));
+
+            let vectorY = centerY - CHARGE_RADIUS - 20; 
+
+            if (!(currentMode === 'atomic' && chkElectron.checked)) {
+                let fForce = calculateMacroForce(c1.q, c2.q, distMeters);
+                
+                let sameSign = (c1.q * c2.q > 0);
+                let dir1 = sameSign ? -1 : 1; 
+                let dir2 = sameSign ? 1 : -1;
+
+                if (c1.q !== 0 && c2.q !== 0) {
+                    drawArrowAndText(c1.x, vectorY, fForce, dir1, COLORS.force1, -15, -2);
+                    drawArrowAndText(c2.x, vectorY, fForce, dir2, COLORS.force2, 25, 2);
+                }
+            } else {
+                let eCharge = charges[2];
+                if (!eCharge) return;
+                
+                let d1Px = Math.abs(eCharge.x - c1.x);
+                let d2Px = Math.abs(c2.x - eCharge.x);
+                let d1M = d1Px / PIXELS_PER_METER;
+                let d2M = d2Px / PIXELS_PER_METER;
+                
+                let f1 = calculateMacroForce(c1.q, eCharge.q, d1M);
+                let dir1 = (c1.q * eCharge.q < 0) ? Math.sign(c1.x - eCharge.x) : Math.sign(eCharge.x - c1.x);
+
+                let f2 = calculateMacroForce(c2.q, eCharge.q, d2M);
+                let dir2 = (c2.q * eCharge.q < 0) ? Math.sign(c2.x - eCharge.x) : Math.sign(eCharge.x - c2.x);
+                
+                if (c1.q !== 0) {
+                    drawArrowAndText(eCharge.x, vectorY, f1, dir1, COLORS.force1, -15, -2);
+                }
+                if (c2.q !== 0) {
+                    drawArrowAndText(eCharge.x, vectorY, f2, dir2, COLORS.force2, 25, 2);
+                }
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        function getMousePos(evt) {
+            let rect = canvas.getBoundingClientRect();
+            let clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+            return { x: clientX - rect.left };
+        }
+
+        function onDown(e) {
+            let pos = getMousePos(e);
+            for (let i = charges.length - 1; i >= 0; i--) {
+                let c = charges[i];
+                if (c.isElectron) continue; 
+                if (Math.abs(pos.x - c.x) <= CHARGE_RADIUS * 1.5) {
+                    draggingCharge = c;
+                    break;
+                }
+            }
+        }
+
+        function onMove(e) {
+            if (!draggingCharge) return;
+            e.preventDefault(); 
+            let pos = getMousePos(e);
+            let newX = pos.x;
+            
+            if (newX < CHARGE_RADIUS + 20) newX = CHARGE_RADIUS + 20;
+            if (newX > width - CHARGE_RADIUS - 20) newX = width - CHARGE_RADIUS - 20;
+
+            charges.forEach(c => {
+                if (c !== draggingCharge) {
+                    if (draggingCharge.x < c.x && newX > c.x - MIN_DISTANCE) newX = c.x - MIN_DISTANCE;
+                    if (draggingCharge.x > c.x && newX < c.x + MIN_DISTANCE) newX = c.x + MIN_DISTANCE;
+                }
+            });
+            draggingCharge.x = newX;
+        }
+
+        function onUp() {
+            if (draggingCharge && !(currentMode === 'atomic' && chkElectron.checked)) {
+                snapToGrid(draggingCharge);
+            }
+            draggingCharge = null;
+        }
+
+        canvas.addEventListener('mousedown', onDown);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        canvas.addEventListener('touchstart', onDown, {passive: false});
+        window.addEventListener('touchmove', onMove, {passive: false});
+        window.addEventListener('touchend', onUp);
+
+        window.onload = () => {
+            setTimeout(() => {
+                resize();
+                initApp();
+                render();
+            }, 50);
+        };
+    </script>
+</body>
+</html>
