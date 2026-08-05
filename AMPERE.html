@@ -21,12 +21,12 @@
             position: absolute;
             top: 15px;
             left: 15px;
-            width: 250px; /* Panel más angosto */
+            width: 250px;
             background: rgba(240, 240, 245, 0.95);
             backdrop-filter: blur(8px);
             border: 1px solid rgba(0, 0, 0, 0.1);
             border-radius: 10px;
-            padding: 15px; /* Menos padding interno */
+            padding: 15px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
             user-select: none;
             z-index: 10;
@@ -34,20 +34,20 @@
         h2 {
             margin-top: 0;
             font-weight: 400;
-            font-size: 1.2rem; /* Título más chico */
+            font-size: 1.2rem;
             color: #1a1a1a;
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
             padding-bottom: 8px;
             margin-bottom: 12px;
         }
         .control-group {
-            margin-bottom: 12px; /* Menos espacio entre controles */
+            margin-bottom: 12px;
         }
         label {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
-            font-size: 0.8rem; /* Letra más chica */
+            font-size: 0.8rem;
             color: #555;
         }
         input[type=range] {
@@ -73,7 +73,7 @@
             background: #4a6784;
             color: white;
             border: none;
-            padding: 8px; /* Botón más bajo */
+            padding: 8px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 0.9rem;
@@ -93,7 +93,7 @@
         }
         .readout span {
             display: block;
-            font-size: 1.2rem; /* Número de lectura más chico */
+            font-size: 1.2rem;
             font-weight: bold;
             color: #2980b9;
             margin-top: 3px;
@@ -375,7 +375,7 @@
         return B;
     }
 
-    // --- BRÚJULAS (INSTANCED MESH) ---
+    // --- BRÚJULAS ---
     const maxCompasses = 800;
     const compassPositions = [];
     for (let i = 0; i < maxCompasses; i++) {
@@ -427,7 +427,7 @@
         instMeshS.instanceMatrix.needsUpdate = true;
     }
 
-    // --- INTEGRACIÓN LÍNEAS ---
+    // --- INTEGRACIÓN LÍNEAS (RK4) ---
     function rk4Step(pos, stepSize, sign) {
         const getDir = (p) => {
             const b = getBField(p);
@@ -460,70 +460,156 @@
         const curve = new WireCurve(bendFactor);
         const end1 = curve.getPoint(0);
         const end2 = curve.getPoint(1);
-        const centerX = bendFactor * R_center; 
 
-        for (let r = 0.8; r <= 8.5; r += 1.2) {
-            seeds.push(new THREE.Vector3(centerX + r, 0, 0));
-            seeds.push(new THREE.Vector3(centerX - r, 0, 0));
+        // --- DISTRIBUCIÓN EXACTA DE 4 PLANOS Y ESPACIADO 1/r ---
+        // Generamos exactamente 4 grupos (12.5%, 37.5%, 62.5%, 87.5% de la longitud)
+        const tValues = [0.125, 0.375, 0.625, 0.875];
+        
+        // Espaciado creciente para denotar disminución de campo (1/r)
+        // La distancia entre la primera y la segunda es 0.5, entre la 2da y 3ra es 0.7, 
+        // y entre la 3ra y la 4ta es aprox 1.68. ¡Perfecto para ilustrar la densidad de flujo!
+        const r4 = R_center * 0.98;
+        const radii = [0.3, 0.8, 1.5, r4]; 
+
+        for (let t of tValues) {
+            const pt = curve.getPoint(t);
+            const tangent = curve.getTangent(t);
+            const normal = new THREE.Vector3(tangent.y, -tangent.x, 0).normalize();
             
-            const yOffset = 3 * (1 - bendFactor);
-            const zOffset = r * bendFactor;
-            
-            if (yOffset > 0.1) {
-                seeds.push(new THREE.Vector3(centerX + r, yOffset, 0));
-                seeds.push(new THREE.Vector3(centerX - r, yOffset, 0));
-                seeds.push(new THREE.Vector3(centerX + r, -yOffset, 0));
-                seeds.push(new THREE.Vector3(centerX - r, -yOffset, 0));
-            }
-            if (zOffset > 0.1) {
-                seeds.push(new THREE.Vector3(centerX, 0, zOffset));
-                seeds.push(new THREE.Vector3(centerX, 0, -zOffset));
+            for (let r of radii) {
+                seeds.push(pt.clone().add(normal.clone().multiplyScalar(r)));
+                seeds.push(pt.clone().add(normal.clone().multiplyScalar(-r)));
             }
         }
 
-        const steps = 400; 
+        // Filtramos para asegurar que no se generen duplicados exactos en el centro
+        const uniqueSeeds = [];
+        for (let s of seeds) {
+            let tooClose = false;
+            for (let us of uniqueSeeds) {
+                if (s.distanceTo(us) < 0.2) { tooClose = true; break; }
+            }
+            if (!tooClose) uniqueSeeds.push(s);
+        }
+
+        const steps = 1500; 
         const stepSize = 0.15;
         const colorObj = new THREE.Color();
         const sign = currentI > 0 ? 1 : -1;
         const maxAbsoluteMag = (mu0_approx * 10.0) / R_center; 
 
-        seeds.forEach(seed => {
-            const positions = [];
-            const colors = [];
-            let currentPos = seed.clone();
-            
-            for (let i = 0; i < steps; i++) {
-                if (currentPos.distanceTo(end1) < 0.6 || currentPos.distanceTo(end2) < 0.6) break;
-                if (currentPos.length() > 20) break;
+        // Geometría del cono para la flecha de dirección
+        const arrowGeo = new THREE.ConeGeometry(0.12, 0.4, 8);
+        arrowGeo.translate(0, 0.2, 0); 
 
-                const B = getBField(currentPos);
-                const mag = B.length();
-                if (mag < 0.001) break;
-
-                positions.push(currentPos.x, currentPos.y, currentPos.z);
+        uniqueSeeds.forEach(seed => {
+            function traceLineDir(dir) {
+                let pList = [];
+                let cList = [];
+                let currentPos = seed.clone();
                 
-                const mappedMag = Math.min(1, mag / maxAbsoluteMag); 
-                const hue = 0.66 * (1 - mappedMag);
-                colorObj.setHSL(hue, 1.0, 0.45);
-                colors.push(colorObj.r, colorObj.g, colorObj.b);
+                for (let i = 0; i < steps; i++) {
+                    if (currentPos.distanceTo(end1) < 0.6 || currentPos.distanceTo(end2) < 0.6) break;
+                    
+                    if (currentPos.distanceTo(meshP.position) > 36) break; 
+                    
+                    if (i > 30 && currentPos.distanceTo(seed) < stepSize * 2.0) {
+                        pList.push(seed.clone());
+                        cList.push(cList[0]); 
+                        break;
+                    }
 
-                const nextPos = rk4Step(currentPos, stepSize, sign);
-                if (!nextPos) break;
-                currentPos = nextPos;
+                    const B = getBField(currentPos);
+                    const mag = B.length();
+                    if (mag < 0.0001) break;
+
+                    pList.push(currentPos.clone());
+                    
+                    const mappedMag = Math.min(1, Math.pow(mag / 10.0, 0.8)); 
+                    const hue = 0.66 * (1 - mappedMag);
+                    colorObj.setHSL(hue, 1.0, 0.45);
+
+                    const distToCenter = currentPos.distanceTo(meshP.position);
+                    const fadeStart = 20;
+                    const fadeEnd = 35;
+                    let fade = 0;
+                    if (distToCenter > fadeStart) {
+                        fade = (distToCenter - fadeStart) / (fadeEnd - fadeStart);
+                        fade = Math.min(1, Math.max(0, fade));
+                    }
+                    
+                    cList.push({
+                        r: colorObj.r * (1 - fade) + 1.0 * fade,
+                        g: colorObj.g * (1 - fade) + 1.0 * fade,
+                        b: colorObj.b * (1 - fade) + 1.0 * fade
+                    });
+
+                    const nextPos = rk4Step(currentPos, stepSize, sign * dir);
+                    if (!nextPos) break;
+                    currentPos = nextPos;
+                }
+                return {pList, cList};
             }
 
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            
-            const mat = new THREE.LineBasicMaterial({ 
-                vertexColors: true,
-                transparent: true,
-                opacity: 0.9,
-                linewidth: 2 
-            });
-            
-            fieldLinesGroup.add(new THREE.Line(geo, mat));
+            const fw = traceLineDir(1);
+            const bw = traceLineDir(-1);
+
+            const finalPositions = [];
+            const finalColors = [];
+
+            for (let i = bw.pList.length - 1; i > 0; i--) {
+                finalPositions.push(bw.pList[i].x, bw.pList[i].y, bw.pList[i].z);
+                finalColors.push(bw.cList[i].r, bw.cList[i].g, bw.cList[i].b);
+            }
+            for (let i = 0; i < fw.pList.length; i++) {
+                finalPositions.push(fw.pList[i].x, fw.pList[i].y, fw.pList[i].z);
+                finalColors.push(fw.cList[i].r, fw.cList[i].g, fw.cList[i].b);
+            }
+
+            if (finalPositions.length > 6) { 
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(finalPositions, 3));
+                geo.setAttribute('color', new THREE.Float32BufferAttribute(finalColors, 3));
+                
+                const mat = new THREE.LineBasicMaterial({ 
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.95,
+                    linewidth: 2 
+                });
+                
+                fieldLinesGroup.add(new THREE.Line(geo, mat));
+
+                // --- AGREGAR FLECHA INDICADORA DE DIRECCIÓN ---
+                // Tomamos un punto en el recorrido para dibujar la flecha indicadora (aprox un 25% del avance)
+                const arrowIdx = Math.floor(fw.pList.length / 4);
+                if (arrowIdx > 2 && fw.pList.length > arrowIdx) {
+                    const arrowPos = fw.pList[arrowIdx];
+                    const B = getBField(arrowPos);
+                    
+                    if (B.lengthSq() > 0.00001) {
+                        const actualDir = B.clone().normalize(); // La flecha siempre apunta en la dirección del campo local
+                        
+                        const mag = B.length();
+                        const mappedMag = Math.min(1, Math.pow(mag / 10.0, 0.8)); 
+                        colorObj.setHSL(0.66 * (1 - mappedMag), 1.0, 0.45);
+                        
+                        const arrowMat = new THREE.MeshBasicMaterial({ 
+                            color: colorObj.clone(),
+                            transparent: true,
+                            opacity: 0.95
+                        });
+                        
+                        const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
+                        arrowMesh.position.copy(arrowPos);
+                        
+                        // Orientamos la punta del cono (que por defecto mira a +Y) hacia el vector B
+                        arrowMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), actualDir);
+                        
+                        fieldLinesGroup.add(arrowMesh);
+                    }
+                }
+            }
         });
     }
 
