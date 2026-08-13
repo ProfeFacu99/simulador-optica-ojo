@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador: Espectrómetro de Masas - Ley de Lorentz</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --bg: #f8f9fa;
+            --panel-bg: #ffffff;
+            --text: #333333;
+            --border: #e0e0e0;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+        }
+        #sidebar {
+            width: 320px;
+            background: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin: 0 0 10px 0;
+            color: var(--primary);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+        }
+        .val-display {
+            color: var(--accent);
+            font-weight: bold;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+        select, button {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            background: var(--bg);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        button.primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            font-weight: bold;
+            padding: 10px;
+        }
+        button.primary:hover {
+            background: #2980b9;
+        }
+        button.secondary {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            font-weight: bold;
+            padding: 10px;
+        }
+        button.secondary:hover {
+            background: #7f8c8d;
+        }
+        button.danger {
+            background: #e74c3c;
+            color: white;
+            border: none;
+        }
+        button.danger:hover {
+            background: #c0392b;
+        }
+        .info-box {
+            background: #eaf2f8;
+            border-left: 4px solid var(--accent);
+            padding: 10px;
+            font-size: 0.85rem;
+            border-radius: 0 4px 4px 0;
+            color: #2c3e50;
+            min-height: 40px;
+        }
+        #main-view {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+        canvas {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .legend {
+            font-size: 0.8rem;
+            color: #666;
+            background: #fdfdfd;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-top: auto;
+        }
+        .legend p { margin: 4px 0; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>Control del Espectrómetro</h1>
+        
+        <div class="control-group">
+            <label>Muestra Biológica</label>
+            <select id="ion-select">
+                <optgroup label="Análisis de Sangre / Clínica">
+                    <option value="na">Sodio (Na⁺) - Electrolitos</option>
+                    <option value="k">Potasio (K⁺) - Electrolitos</option>
+                    <option value="ca">Calcio (Ca²⁺) - Óseo/Coagulación</option>
+                    <option value="fe">Hierro (Fe²⁺) - Anemia</option>
+                </optgroup>
+                <optgroup label="Biología Vegetal">
+                    <option value="mg">Magnesio (Mg²⁺) - Clorofila</option>
+                    <option value="cl">Cloruro (Cl⁻) - Estomas</option>
+                </optgroup>
+                <optgroup label="Toxicología Ambiental">
+                    <option value="pb">Plomo (Pb²⁺) - Intoxicación</option>
+                </optgroup>
+                <optgroup label="Ajuste Manual">
+                    <option value="custom">Ión Personalizado...</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div id="sample-info" class="info-box">
+            Selecciona una muestra para ver sus detalles.
+        </div>
+
+        <div class="control-group">
+            <label>Carga (q) <span class="val-display" id="val-q">+1 e</span></label>
+            <input type="range" id="slider-q" min="-3" max="3" step="1" value="1" disabled>
+        </div>
+
+        <div class="control-group">
+            <label>Masa (m) <span class="val-display" id="val-m">23 u</span></label>
+            <input type="range" id="slider-m" min="10" max="250" step="1" value="23" disabled>
+        </div>
+
+        <div class="control-group" style="margin-top: 10px;">
+            <label>Velocidad de inyección (v) <span class="val-display" id="val-v">5.0</span></label>
+            <input type="range" id="slider-v" min="2" max="10" step="0.1" value="5.0">
+        </div>
+
+        <div class="control-group">
+            <label>Campo Magnético (B) <span class="val-display" id="val-b">1.1 T</span></label>
+            <input type="range" id="slider-b" min="-3" max="3" step="0.1" value="1.1">
+            <small style="font-size: 0.75rem; color: #7f8c8d;">(Positivo: Saliente ⊙ | Negativo: Entrante ⊗)</small>
+        </div>
+
+        <button class="primary" id="btn-fire" style="margin-top: 10px;">Disparar Partícula</button>
+        <button class="secondary" id="btn-reset">Restablecer Valores</button>
+        <button class="danger" id="btn-clear">Limpiar Pantalla</button>
+
+        <div class="legend">
+            <p><strong>F = q·v·B</strong> (Ingresan a 90°)</p>
+            <p><span style="color:#2ecc71; font-weight:bold;">→</span> Vector Fuerza (F)</p>
+            <p><strong>Rojo/Naranja</strong> : Iones (+)</p>
+            <p><strong>Azul/Verde</strong> : Iones (-)</p>
+        </div>
+    </div>
+
+    <div id="main-view">
+        <canvas id="sim-canvas" width="700" height="550"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sim-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Elements
+        const ionSelect = document.getElementById('ion-select');
+        const sampleInfo = document.getElementById('sample-info');
+        const sliderQ = document.getElementById('slider-q');
+        const sliderM = document.getElementById('slider-m');
+        const sliderV = document.getElementById('slider-v');
+        const sliderB = document.getElementById('slider-b');
+        
+        const valQ = document.getElementById('val-q');
+        const valM = document.getElementById('val-m');
+        const valV = document.getElementById('val-v');
+        const valB = document.getElementById('val-b');
+
+        const btnFire = document.getElementById('btn-fire');
+        const btnReset = document.getElementById('btn-reset');
+        const btnClear = document.getElementById('btn-clear');
+
+        // Physics Constants & State
+        let particles = [];
+        let animationId;
+
+        // Path representing the glass tube bounds (Widened from magnet downwards)
+        const tubePath = new Path2D();
+        tubePath.moveTo(0, 90);
+        tubePath.lineTo(300, 90);
+        tubePath.arc(300, 300, 210, -Math.PI/2, 0, false); // Outer curve ends at x=510, y=300
+        tubePath.lineTo(600, 500); // Flare out to the right
+        tubePath.lineTo(150, 500); // Flare out to the left for massive screen
+        tubePath.lineTo(350, 300); // Back to inner corner
+        tubePath.arc(300, 300, 50, 0, -Math.PI/2, true); // Inner curve back to 300, 250
+        tubePath.lineTo(0, 250);
+        tubePath.closePath();
+
+        const presets = {
+            'na': { q: 1, m: 23, color: '#f39c12', desc: '<strong>Sodio:</strong> Catión fundamental en el impulso nervioso y equilibrio de líquidos corporales.' },
+            'k':  { q: 1, m: 39, color: '#9b59b6', desc: '<strong>Potasio:</strong> Principal catión intracelular, clave para la contracción muscular.' },
+            'ca': { q: 2, m: 40, color: '#e74c3c', desc: '<strong>Calcio:</strong> Esencial para la coagulación sanguínea y la estructura ósea.' },
+            'fe': { q: 2, m: 56, color: '#c0392b', desc: '<strong>Hierro:</strong> Componente central de la hemoglobina; su deficiencia causa anemia.' },
+            'mg': { q: 2, m: 24, color: '#27ae60', desc: '<strong>Magnesio:</strong> Átomo central de la clorofila en plantas; vital para la fotosíntesis.' },
+            'cl': { q: -1, m: 35.5, color: '#3498db', desc: '<strong>Cloruro:</strong> Principal anión extracelular, regula la apertura de estomas en hojas.' },
+            'pb': { q: 2, m: 207, color: '#7f8c8d', desc: '<strong>Plomo:</strong> Metal pesado muy tóxico. Un espectrómetro puede detectar trazas en sangre.' },
+            'custom': { color: '#34495e', desc: '<strong>Modo Libre:</strong> Configura manualmente la masa y carga de la partícula a investigar.' }
+        };
+
+        // Update UI
+        function updateDisplays() {
+            let q = parseInt(sliderQ.value);
+            valQ.innerText = (q > 0 ? '+' : '') + q + ' e';
+            valM.innerText = sliderM.value + ' u';
+            valV.innerText = sliderV.value;
+            valB.innerText = sliderB.value + ' T';
+        }
+
+        function loadPreset(val) {
+            if (val === 'custom') {
+                sliderQ.disabled = false;
+                sliderM.disabled = false;
+                sampleInfo.innerHTML = presets['custom'].desc;
+            } else {
+                sliderQ.disabled = true;
+                sliderM.disabled = true;
+                sliderQ.value = presets[val].q;
+                sliderM.value = presets[val].m;
+                sampleInfo.innerHTML = presets[val].desc;
+            }
+            updateDisplays();
+        }
+
+        ionSelect.addEventListener('change', (e) => {
+            loadPreset(e.target.value);
+        });
+
+        [sliderQ, sliderM, sliderV, sliderB].forEach(slider => {
+            slider.addEventListener('input', updateDisplays);
+        });
+
+        function getParticleColor(q) {
+            if (ionSelect.value !== 'custom') return presets[ionSelect.value].color;
+            if (q > 0) return '#e74c3c';
+            if (q < 0) return '#3498db';
+            return '#7f8c8d';
+        }
+
+        btnFire.addEventListener('click', () => {
+            const q = parseFloat(sliderQ.value);
+            const m = parseFloat(sliderM.value);
+            const v = parseFloat(sliderV.value);
+            const B = parseFloat(sliderB.value);
+            
+            particles.push({
+                x: 20,
+                y: 170, // Center of injection tube
+                vx: v * 20, // scale for canvas
+                vy: 0,
+                q: q,
+                m: m,
+                B: B,
+                color: getParticleColor(q),
+                path: [],
+                active: true,
+                hitScreen: false
+            });
+        });
+
+        btnClear.addEventListener('click', () => {
+            particles = [];
+        });
+
+        btnReset.addEventListener('click', () => {
+            ionSelect.value = 'na';
+            sliderV.value = 5.0;
+            sliderB.value = 1.1;
+            loadPreset('na');
+            particles = [];
+        });
+
+        function drawArrow(x, y, dx, dy, color) {
+            const len = Math.hypot(dx, dy);
+            if (len < 0.1) return;
+            const scale = 25 / len; // fixed visual length
+            const endX = x + dx * scale;
+            const endY = y + dy * scale;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            const angle = Math.atan2(dy, dx);
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - 8 * Math.cos(angle - Math.PI/6), endY - 8 * Math.sin(angle - Math.PI/6));
+            ctx.lineTo(endX - 8 * Math.cos(angle + Math.PI/6), endY - 8 * Math.sin(angle + Math.PI/6));
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        // Drawing Functions
+        function drawStatic() {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Tube Glass Background
+            ctx.fillStyle = '#eaf2f8'; 
+            ctx.fill(tubePath);
+            ctx.strokeStyle = '#aeb6bf';
+            ctx.lineWidth = 3;
+            ctx.stroke(tubePath);
+
+            // Draw Magnetic Field Area (Rectangular block)
+            const B_val = parseFloat(sliderB.value);
+            if (Math.abs(B_val) > 0) {
+                ctx.fillStyle = 'rgba(236, 240, 241, 0.5)';
+                ctx.fillRect(300, 90, 210, 210);
+                
+                ctx.strokeStyle = '#bdc3c7';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.strokeRect(300, 90, 210, 210);
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = '#7f8c8d';
+                ctx.strokeStyle = '#7f8c8d';
+                ctx.lineWidth = 1.5;
+                for(let x=315; x<=495; x+=30) {
+                    for(let y=105; y<=285; y+=30) {
+                        // Draw vectors inside the rectangular field
+                        ctx.beginPath();
+                        ctx.arc(x, y, 4, 0, Math.PI*2);
+                        ctx.stroke();
+                        
+                        if (B_val > 0) {
+                            // DOT (Out of screen)
+                            ctx.beginPath();
+                            ctx.arc(x, y, 1.5, 0, Math.PI*2);
+                            ctx.fill();
+                        } else {
+                            // CROSS (Into screen)
+                            ctx.beginPath();
+                            ctx.moveTo(x-2, y-2); ctx.lineTo(x+2, y+2);
+                            ctx.moveTo(x+2, y-2); ctx.lineTo(x-2, y+2);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            // Detector Screen
+            ctx.beginPath();
+            ctx.moveTo(150, 498);
+            ctx.lineTo(600, 498);
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 6;
+            ctx.stroke();
+
+            // Accelerator Plates
+            ctx.fillStyle = '#e74c3c'; 
+            ctx.fillRect(100, 100, 6, 140);
+            ctx.fillStyle = '#3498db'; 
+            ctx.fillRect(140, 100, 6, 140);
+            
+            // Text Labels (Coordinates adjusted to avoid overlap)
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Cañón', 15, 80);
+            ctx.fillText('Placas Aceleradoras', 110, 80);
+            ctx.fillText('+', 85, 175);
+            ctx.fillText('−', 150, 175);
+            ctx.fillText('Imán (Región B)', 420, 80);
+            ctx.fillText('Pantalla Detectora', 320, 520);
+        }
+
+        // Physics Loop
+        function updatePhysics() {
+            // High precision numerical integration
+            const dt = 0.002; 
+            const steps = 40; 
+            const simScale = 15.0;
+
+            for (let p of particles) {
+                if (!p.active) continue;
+
+                for (let i = 0; i < steps; i++) {
+                    let ax = 0, ay = 0;
+                    
+                    // The magnetic field acts specifically in the rectangular corner block
+                    if (p.x >= 300 && p.x <= 510 && p.y >= 90 && p.y <= 300) {
+                        ax = -(p.q * p.B * p.vy * simScale) / p.m;
+                        ay =  (p.q * p.B * p.vx * simScale) / p.m;
+
+                        p.vx += ax * dt;
+                        p.vy += ay * dt;
+                    }
+
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+
+                    // Collision detection with the glass tube
+                    if (!ctx.isPointInPath(tubePath, p.x, p.y)) {
+                        p.active = false;
+                        
+                        // Check if it specifically hit the detector screen line
+                        if (p.y > 490 && p.x >= 150 && p.x <= 600) {
+                            p.hitScreen = true;
+                        }
+                        break;
+                    }
+                }
+                
+                if(p.active || p.path.length < 3000) {
+                    p.path.push({
+                        x: p.x, 
+                        y: p.y, 
+                        // Trace normalized force vector for drawing
+                        fx: -(p.q * p.B * p.vy) / p.m, 
+                        fy:  (p.q * p.B * p.vx) / p.m 
+                    });
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawStatic();
+
+            for (let p of particles) {
+                // Draw path trace
+                if (p.path.length > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.path[0].x, p.path[0].y);
+                    for (let i = 1; i < p.path.length; i++) {
+                        ctx.lineTo(p.path[i].x, p.path[i].y);
+                    }
+                    ctx.strokeStyle = p.color;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // If hit screen, draw a bright "splat"
+                if (p.hitScreen && !p.active) {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
+                    ctx.fillStyle = '#f1c40f'; // glow
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                }
+
+                // Draw active particle head and vectors
+                if (p.active) {
+                    // Draw force arrow only in B-field
+                    if (p.x >= 300 && p.x <= 510 && p.y >= 90 && p.y <= 300 && p.B !== 0 && p.q !== 0) {
+                        const lastState = p.path[p.path.length - 1];
+                        if (lastState && (lastState.fx !== 0 || lastState.fy !== 0)) {
+                            drawArrow(p.x, p.y, lastState.fx, lastState.fy, '#2ecc71');
+                        }
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                    
+                    ctx.fillStyle = 'white';
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    let sign = p.q > 0 ? '+' : (p.q < 0 ? '-' : '');
+                    ctx.fillText(sign, p.x, p.y);
+                }
+            }
+        }
+
+        function loop() {
+            updatePhysics();
+            draw();
+            animationId = requestAnimationFrame(loop);
+        }
+
+        // Initialize
+        loadPreset('na');
+        loop();
+
+    </script>
+</body>
+</html>
