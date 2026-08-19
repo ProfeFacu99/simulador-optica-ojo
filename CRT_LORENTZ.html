@@ -18,8 +18,8 @@
             width: 300px; z-index: 100; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
             border: 1px solid #e0e0e0;
-            max-height: 90vh; /* Nunca supera la pantalla */
-            overflow-y: auto;  /* Scroll interno si es necesario */
+            max-height: 90vh;
+            overflow-y: auto;
         }
         h2 { margin: 0 0 15px 0; font-size: 1.2em; color: #1a1a1a; border-bottom: 2px solid #1976d2; padding-bottom: 8px; }
         .control { margin-bottom: 20px; }
@@ -40,29 +40,26 @@
         
         .val { margin-left: auto; color: #1565c0; font-weight: 700; font-size: 1.1em; }
         
-        /* FIX DEFINITIVO DE SLIDERS PARA CROSS-BROWSER (LINUX/FIREFOX/CHROME) */
         input[type=range] { 
             -webkit-appearance: none; appearance: none;
             width: 100%; height: 8px; 
             background: var(--track-bg, #e0e0e0); 
             border-radius: 4px;
             margin: 12px 0; outline: none;
-            overflow: visible; /* FIX: sin esto, el thumb (18px) queda recortado por el overflow:hidden heredado de "body, button, input" */
+            overflow: visible;
         }
         
-        /* Apagar pistas nativas para evitar recortes */
         input[type=range]::-webkit-slider-runnable-track { background: transparent; border: none; }
         input[type=range]::-moz-range-track { background: transparent; border: none; }
         input[type=range]::-moz-range-progress { background: transparent; border: none; }
         
-        /* Tiradores (Thumbs) flotantes */
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none; appearance: none;
             height: 18px; width: 18px; border-radius: 50%;
             background: #1976d2; cursor: pointer; 
             border: 2px solid #fff; 
             box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-            margin-top: -5px; /* Compensa la diferencia de altura con la barra */
+            margin-top: -5px; 
             position: relative; z-index: 10;
         }
         input[type=range]::-moz-range-thumb {
@@ -318,12 +315,10 @@
         const particles = [];
         for(let i=0; i<MAX_PARTICLES; i++) {
             const p = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), new THREE.MeshBasicMaterial({color: 0x00ff00}));
-            // delay aleatorio inicial para que no salgan apelotonados
             p.userData = { active: false, delay: Math.floor(Math.random() * 50) };
             scene.add(p); particles.push(p);
         }
 
-        // --- GESTIÓN DE ESTADOS Y EVENTOS ---
         window.isScanning = false;
         window.isInfinity = false;
         window.showMagnets = true;
@@ -445,13 +440,14 @@
                 let hPhase = (t % hPeriod) / hPeriod; 
                 const vPeriod = 2000; 
                 let vPhase = (t % vPeriod) / vPeriod; 
-                document.getElementById('sliderBy').value = 70 - (hPhase * 140);
-                document.getElementById('sliderBx').value = 70 - (vPhase * 140);
+                
+                document.getElementById('sliderBy').value = 100 - (hPhase * 200);
+                document.getElementById('sliderBx').value = 50 - (vPhase * 100);
             } else if (window.isInfinity) {
                 const period = 2000; 
                 const omega = (t % period) / period * Math.PI * 2;
                 
-                document.getElementById('sliderBy').value = -70 * Math.sin(omega);
+                document.getElementById('sliderBy').value = -100 * Math.sin(omega);
                 document.getElementById('sliderBx').value = 35 * Math.sin(2 * (omega + phaseShift));
             }
 
@@ -496,16 +492,12 @@
             let hasHit = false, hitX = 0, hitY = 0;
 
             particles.forEach((p, i) => {
-                // Control de Densidad Térmica
                 if (i >= activeParticles) {
                     p.visible = false;
                     p.userData.active = false;
                     return;
                 }
 
-                // FIX 1: Delay de Emisión. 
-                // Si la partícula chocó y se recicló, espera unos frames antes de reaparecer.
-                // Esto distribuye el haz de forma continua sin tener que teletransportarlos atrás del cañón.
                 if (p.userData.delay > 0 && va > 0) {
                     p.userData.delay--;
                     p.visible = false;
@@ -529,13 +521,11 @@
                 let vel = p.userData.vel;
 
                 if (va === 0) {
-                    // Movimiento Browniano (Nube térmica)
                     const jitter = 0.08 * tNorm;
                     pos.x += (Math.random() - 0.5) * jitter;
                     pos.y += (Math.random() - 0.5) * jitter;
                     pos.z += (Math.random() - 0.5) * jitter;
                     
-                    // FIX 2: Clamping estricto para que los electrones NO viajen atrás del cátodo
                     if (pos.z < Z_EMISSION) pos.z = Z_EMISSION;
                     if (pos.z > -13.2) pos.z = -13.2;
                     
@@ -545,16 +535,13 @@
                     vel.set(0,0,0);
                     p.scale.set(1, 1, 1);
                 } else {
-                    // Disparo y Aceleración
                     vel.z = baseVisualSpeed;
                     
-                    // Lente Electrostática (Enfoque del láser)
                     if (pos.z < Z_START) { 
                         pos.x *= 0.5; 
                         pos.y *= 0.5; 
                     }
 
-                    // Campo Magnético de Lorentz
                     let B = new THREE.Vector3(0,0,0);
                     if (pos.z > -10 && pos.z < -6) B.x = bx;
                     if (pos.z > -4 && pos.z < 0) B.y = by;
@@ -567,7 +554,6 @@
                     
                     pos.add(vel.clone().multiplyScalar(0.016));
 
-                    // Colisión con la pantalla de cristal
                     let t_pos = (pos.z - Z_START) / 25;
                     let rLimit = R_BACK + t_pos * (R_FRONT - R_BACK);
                     let rActual = Math.sqrt(pos.x**2 + pos.y**2);
@@ -576,14 +562,11 @@
                         if (pos.z >= Z_END - 0.5 && rActual < rLimit) {
                             hasHit = true; hitX = pos.x; hitY = pos.y;
                         }
-                        // Al chocar, vuelven al cátodo y entran en "delay" para separarse de sus compañeros
                         pos.set(0, 0, Z_EMISSION);
                         vel.set(0, 0, baseVisualSpeed);
-                        p.userData.delay = Math.floor(Math.random() * 40); // Espera entre 0 y 40 frames
+                        p.userData.delay = Math.floor(Math.random() * 40);
                     }
 
-                    // Percepción visual de velocidad: el electrón se alarga como una pequeña estela
-                    // orientada en la dirección real de su movimiento (curva con los campos magnéticos)
                     const speedMag = vel.length();
                     if (speedMag > 0.01) {
                         _velDir.copy(vel).normalize();
@@ -594,7 +577,6 @@
                 }
             });
 
-            // Lógica de Persistencia de la Estela
             if (hasHit) {
                 trailPositions.unshift({x: hitX, y: hitY});
                 trailPositions.pop();
@@ -644,7 +626,7 @@
 
             arrows1.forEach(l => {
                 const active = Math.abs(bx) > 0.02;
-                l.group.visible = active; // Las flechas siempre se ven si hay campo
+                l.group.visible = active; 
                 if (active) {
                     const intensity = Math.abs(bx) / 2; const thickness = 1 + intensity * 2.5;
                     l.shaft.scale.set(thickness, 1, thickness); l.head.scale.set(thickness, 1, thickness);
@@ -654,7 +636,7 @@
 
             arrows2.forEach(l => {
                 const active = Math.abs(by) > 0.02;
-                l.group.visible = active; // Las flechas siempre se ven si hay campo
+                l.group.visible = active; 
                 if (active) {
                     const intensity = Math.abs(by) / 2; const thickness = 1 + intensity * 2.5;
                     l.shaft.scale.set(thickness, 1, thickness); l.head.scale.set(thickness, 1, thickness);
