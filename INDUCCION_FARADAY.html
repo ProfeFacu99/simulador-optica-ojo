@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ley de inducción electromagnética de Faraday</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff; /* Fondo blanco */
+            color: #333333; /* Texto oscuro para contraste */
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #0056b3; /* Azul oscuro */
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        p {
+            margin-bottom: 30px;
+            text-align: center;
+            color: #555555;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            max-width: 1000px;
+            justify-content: center;
+        }
+        .panel {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .controls {
+            flex: 1;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #444;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .btn-pause {
+            background-color: #ff9800;
+            color: #fff;
+            border: none;
+            padding: 10px 15px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+        .btn-pause:hover {
+            background-color: #e68a00;
+        }
+        .btn-pause.paused {
+            background-color: #4CAF50;
+        }
+        .btn-pause.paused:hover {
+            background-color: #45a049;
+        }
+        .meters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: auto;
+            text-align: center;
+            padding-top: 15px;
+        }
+        .meter-box {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .meter-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            font-family: monospace;
+            color: #0056b3;
+        }
+        .meter-value.fem {
+            color: #d32f2f;
+        }
+        canvas {
+            background-color: #ffffff;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .visuals {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        h3 {
+            color: #333;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 5px;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Ley de inducción electromagnética de Faraday</h1>
+    <p>Simulación de una espira rotando en un campo magnético uniforme.</p>
+
+    <div class="container">
+        <!-- Panel de Controles y Medidores -->
+        <div class="panel controls">
+            <h3>Variables Físicas</h3>
+            
+            <div class="control-group">
+                <label><span>Campo Magnético (B)</span> <span id="valB">1.0 T</span></label>
+                <input type="range" id="sliderB" min="0" max="3" step="0.1" value="1.0">
+            </div>
+            
+            <div class="control-group">
+                <label><span>Área de Espira (A)</span> <span id="valA">0.10 m²</span></label>
+                <input type="range" id="sliderA" min="0.01" max="0.5" step="0.01" value="0.1">
+            </div>
+            
+            <div class="control-group">
+                <label><span>Nº de Espiras (N)</span> <span id="valN">50</span></label>
+                <input type="range" id="sliderN" min="1" max="200" step="1" value="50">
+            </div>
+            
+            <div class="control-group">
+                <label><span>Velocidad Angular (ω)</span> <span id="valW">5.0 rad/s</span></label>
+                <input type="range" id="sliderW" min="0" max="20" step="0.5" value="5">
+            </div>
+
+            <button id="btnPause" class="btn-pause">Pausar Simulación</button>
+
+            <div class="meters">
+                <div class="meter-box">
+                    <div>Flujo Magnético (Φ)</div>
+                    <div class="meter-value" id="meterFlux">0.00 Wb</div>
+                </div>
+                <div class="meter-box">
+                    <div>F.E.M. Inducida (ε)</div>
+                    <div class="meter-value fem" id="meterFem">0.00 V</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Visualización y Gráfica -->
+        <div class="panel visuals">
+            <div>
+                <h3>Vista Transversal de la Espira</h3>
+                <canvas id="simCanvas" width="500" height="200"></canvas>
+            </div>
+            <div>
+                <h3>Osciloscopio (F.E.M.)</h3>
+                <canvas id="graphCanvas" width="500" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Referencias del DOM
+        const simCanvas = document.getElementById('simCanvas');
+        const simCtx = simCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        const btnPause = document.getElementById('btnPause');
+
+        const sliders = {
+            B: document.getElementById('sliderB'),
+            A: document.getElementById('sliderA'),
+            N: document.getElementById('sliderN'),
+            W: document.getElementById('sliderW')
+        };
+        const labels = {
+            B: document.getElementById('valB'),
+            A: document.getElementById('valA'),
+            N: document.getElementById('valN'),
+            W: document.getElementById('valW')
+        };
+        const meters = {
+            Flux: document.getElementById('meterFlux'),
+            Fem: document.getElementById('meterFem')
+        };
+
+        // Estado de la simulación
+        let time = 0;
+        let lastTime = performance.now();
+        let isPaused = false;
+        const historyFEM = [];
+        const maxHistory = graphCanvas.width;
+
+        // Control de pausa
+        btnPause.addEventListener('click', () => {
+            isPaused = !isPaused;
+            if (isPaused) {
+                btnPause.textContent = "Reanudar Simulación";
+                btnPause.classList.add('paused');
+            } else {
+                btnPause.textContent = "Pausar Simulación";
+                btnPause.classList.remove('paused');
+                lastTime = performance.now(); 
+            }
+        });
+
+        // Actualizar etiquetas de los sliders
+        function updateLabels() {
+            labels.B.innerText = parseFloat(sliders.B.value).toFixed(1) + ' T';
+            labels.A.innerText = parseFloat(sliders.A.value).toFixed(2) + ' m²';
+            labels.N.innerText = sliders.N.value;
+            labels.W.innerText = parseFloat(sliders.W.value).toFixed(1) + ' rad/s';
+        }
+
+        Object.values(sliders).forEach(slider => {
+            slider.addEventListener('input', updateLabels);
+        });
+
+        // Bucle principal de simulación
+        function animate(currentTime) {
+            const dt = (currentTime - lastTime) / 1000; 
+            lastTime = currentTime;
+
+            if (!isPaused) {
+                time += dt;
+            }
+
+            // Obtener variables actuales
+            const B = parseFloat(sliders.B.value);
+            const A = parseFloat(sliders.A.value);
+            const N = parseInt(sliders.N.value);
+            const W = parseFloat(sliders.W.value);
+
+            // Calcular ángulo, Flujo y FEM
+            const theta = W * time;
+            const flux = B * A * Math.cos(theta); 
+            const totalFlux = N * flux;
+            const fem = N * B * A * W * Math.sin(theta); 
+
+            // Actualizar medidores 
+            meters.Flux.innerText = totalFlux.toFixed(2) + ' Wb';
+            meters.Fem.innerText = fem.toFixed(2) + ' V';
+
+            // Guardar historial solo si no está pausado
+            if (!isPaused) {
+                historyFEM.push(fem);
+                if (historyFEM.length > maxHistory) {
+                    historyFEM.shift();
+                }
+            }
+
+            drawSim(theta, B, A);
+            drawGraph();
+
+            requestAnimationFrame(animate);
+        }
+
+        function drawSim(theta, B, A) {
+            simCtx.clearRect(0, 0, simCanvas.width, simCanvas.height);
+            const cx = simCanvas.width / 2;
+            const cy = simCanvas.height / 2;
+
+            // Dibujar Imanes: Arriba Norte (Rojo), Abajo Sur (Azul)
+            simCtx.fillStyle = '#d32f2f'; // Rojo un poco más oscuro
+            simCtx.fillRect(100, 10, 300, 25);
+            
+            simCtx.fillStyle = '#1976D2'; // Azul un poco más oscuro
+            simCtx.fillRect(100, simCanvas.height - 35, 300, 25);
+
+            // Letras N y S centradas en los imanes
+            simCtx.fillStyle = '#FFFFFF';
+            simCtx.font = 'bold 16px sans-serif';
+            simCtx.textAlign = 'center';
+            simCtx.textBaseline = 'middle';
+            simCtx.fillText('N', cx, 22);
+            simCtx.fillText('S', cx, simCanvas.height - 22);
+
+            // Dibujar líneas de campo magnético (gris oscuro para fondo blanco)
+            simCtx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            simCtx.lineWidth = 1;
+            simCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            const lineSpacing = 300 / (B * 10 + 2); 
+            if (B > 0) {
+                for(let x = 120; x < 400; x += lineSpacing) {
+                    simCtx.beginPath();
+                    simCtx.moveTo(x, 35);
+                    simCtx.lineTo(x, simCanvas.height - 35);
+                    simCtx.stroke();
+                    
+                    // Flechas
+                    simCtx.beginPath();
+                    simCtx.moveTo(x - 3, cy);
+                    simCtx.lineTo(x, cy + 5);
+                    simCtx.lineTo(x + 3, cy);
+                    simCtx.fill();
+                }
+            }
+
+            const maxVisualRadius = cy - 40; 
+            const maxSliderA = parseFloat(sliders.A.max);
+            const scaleFactor = maxVisualRadius / Math.sqrt(maxSliderA);
+            const loopRadius = Math.sqrt(A) * scaleFactor;
+            
+            const px1 = cx + loopRadius * Math.cos(theta);
+            const py1 = cy + loopRadius * Math.sin(theta);
+            const px2 = cx - loopRadius * Math.cos(theta);
+            const py2 = cy - loopRadius * Math.sin(theta);
+
+            // Dibujar espira (azul oscuro para destacar)
+            simCtx.strokeStyle = '#0056b3'; 
+            simCtx.lineWidth = 4;
+            simCtx.beginPath();
+            simCtx.moveTo(px2, py2);
+            simCtx.lineTo(px1, py1);
+            simCtx.stroke();
+
+            // Puntos de los extremos (naranja)
+            simCtx.fillStyle = '#ff9800';
+            simCtx.beginPath();
+            simCtx.arc(px1, py1, 5, 0, Math.PI * 2);
+            simCtx.arc(px2, py2, 5, 0, Math.PI * 2);
+            simCtx.fill();
+        }
+
+        function drawGraph() {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            const cy = graphCanvas.height / 2;
+
+            // Eje central
+            graphCtx.strokeStyle = '#cccccc'; // Eje gris claro
+            graphCtx.lineWidth = 1;
+            graphCtx.beginPath();
+            graphCtx.moveTo(0, cy);
+            graphCtx.lineTo(graphCanvas.width, cy);
+            graphCtx.stroke();
+
+            // Dibujar onda
+            graphCtx.strokeStyle = '#d32f2f'; // Rojo intenso
+            graphCtx.lineWidth = 2;
+            graphCtx.beginPath();
+            
+            const currentN = parseInt(sliders.N.value);
+            const currentB = parseFloat(sliders.B.value);
+            const currentA = parseFloat(sliders.A.value);
+            const currentW = parseFloat(sliders.W.value);
+            
+            const maxFemPossible = currentN * currentB * currentA * currentW;
+            const scaleY = maxFemPossible > 0 ? (cy - 10) / maxFemPossible : 1; 
+
+            for (let i = 0; i < historyFEM.length; i++) {
+                const x = i;
+                const y = cy - (historyFEM[i] * scaleY);
+                if (i === 0) graphCtx.moveTo(x, y);
+                else graphCtx.lineTo(x, y);
+            }
+            graphCtx.stroke();
+        }
+
+        // Iniciar
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
