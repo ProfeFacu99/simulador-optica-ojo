@@ -7,53 +7,57 @@
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #ffffff; /* Fondo blanco */
-            color: #333333; /* Texto oscuro para contraste */
+            background-color: #ffffff;
+            color: #333333;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
         h1 {
-            color: #0056b3; /* Azul oscuro */
-            margin-bottom: 5px;
+            color: #0056b3;
+            margin-bottom: 0;
+            font-size: 1.5em;
             text-align: center;
         }
         p {
-            margin-bottom: 30px;
+            margin-bottom: 15px;
             text-align: center;
             color: #555555;
+            font-size: 0.9em;
         }
         .container {
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 15px;
+            width: 100%;
             max-width: 1000px;
             justify-content: center;
         }
         .panel {
             background-color: #ffffff;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid #e0e0e0;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-sizing: border-box;
         }
         .controls {
-            flex: 1;
-            min-width: 300px;
+            flex: 1 1 300px;
             display: flex;
             flex-direction: column;
         }
         .control-group {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
         label {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             font-weight: bold;
             color: #444;
+            font-size: 0.9em;
         }
         input[type=range] {
             width: 100%;
@@ -63,12 +67,12 @@
             background-color: #ff9800;
             color: #fff;
             border: none;
-            padding: 10px 15px;
+            padding: 10px;
             font-size: 1em;
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
-            margin-top: 10px;
+            margin-top: 5px;
             transition: background-color 0.2s;
         }
         .btn-pause:hover {
@@ -90,25 +94,23 @@
         }
         .meter-box {
             background-color: #f9f9f9;
-            padding: 15px;
+            padding: 10px;
             border-radius: 5px;
             border: 1px solid #ddd;
+            font-size: 0.9em;
         }
         .meter-value {
-            font-size: 1.5em;
+            font-size: 1.3em;
             font-weight: bold;
             font-family: monospace;
             color: #0056b3;
+            margin-top: 5px;
         }
         .meter-value.fem {
             color: #d32f2f;
         }
-        canvas {
-            background-color: #ffffff;
-            border-radius: 5px;
-            border: 1px solid #ddd;
-        }
         .visuals {
+            flex: 1 1 400px;
             display: flex;
             flex-direction: column;
             gap: 15px;
@@ -118,6 +120,18 @@
             border-bottom: 2px solid #f0f0f0;
             padding-bottom: 5px;
             margin-top: 0;
+            font-size: 1.1em;
+        }
+        /* Ajuste clave para el Iframe */
+        canvas {
+            background-color: #ffffff;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
         }
     </style>
 </head>
@@ -169,6 +183,7 @@
         <div class="panel visuals">
             <div>
                 <h3>Vista Transversal de la Espira</h3>
+                <!-- Mantenemos el aspect ratio original en los atributos -->
                 <canvas id="simCanvas" width="500" height="200"></canvas>
             </div>
             <div>
@@ -179,7 +194,6 @@
     </div>
 
     <script>
-        // Referencias del DOM
         const simCanvas = document.getElementById('simCanvas');
         const simCtx = simCanvas.getContext('2d');
         const graphCanvas = document.getElementById('graphCanvas');
@@ -203,14 +217,12 @@
             Fem: document.getElementById('meterFem')
         };
 
-        // Estado de la simulación
         let time = 0;
         let lastTime = performance.now();
         let isPaused = false;
         const historyFEM = [];
         const maxHistory = graphCanvas.width;
 
-        // Control de pausa
         btnPause.addEventListener('click', () => {
             isPaused = !isPaused;
             if (isPaused) {
@@ -223,7 +235,6 @@
             }
         });
 
-        // Actualizar etiquetas de los sliders
         function updateLabels() {
             labels.B.innerText = parseFloat(sliders.B.value).toFixed(1) + ' T';
             labels.A.innerText = parseFloat(sliders.A.value).toFixed(2) + ' m²';
@@ -235,7 +246,6 @@
             slider.addEventListener('input', updateLabels);
         });
 
-        // Bucle principal de simulación
         function animate(currentTime) {
             const dt = (currentTime - lastTime) / 1000; 
             lastTime = currentTime;
@@ -244,23 +254,19 @@
                 time += dt;
             }
 
-            // Obtener variables actuales
             const B = parseFloat(sliders.B.value);
             const A = parseFloat(sliders.A.value);
             const N = parseInt(sliders.N.value);
             const W = parseFloat(sliders.W.value);
 
-            // Calcular ángulo, Flujo y FEM
             const theta = W * time;
             const flux = B * A * Math.cos(theta); 
             const totalFlux = N * flux;
             const fem = N * B * A * W * Math.sin(theta); 
 
-            // Actualizar medidores 
             meters.Flux.innerText = totalFlux.toFixed(2) + ' Wb';
             meters.Fem.innerText = fem.toFixed(2) + ' V';
 
-            // Guardar historial solo si no está pausado
             if (!isPaused) {
                 historyFEM.push(fem);
                 if (historyFEM.length > maxHistory) {
@@ -279,14 +285,11 @@
             const cx = simCanvas.width / 2;
             const cy = simCanvas.height / 2;
 
-            // Dibujar Imanes: Arriba Norte (Rojo), Abajo Sur (Azul)
-            simCtx.fillStyle = '#d32f2f'; // Rojo un poco más oscuro
+            simCtx.fillStyle = '#d32f2f'; 
             simCtx.fillRect(100, 10, 300, 25);
-            
-            simCtx.fillStyle = '#1976D2'; // Azul un poco más oscuro
+            simCtx.fillStyle = '#1976D2'; 
             simCtx.fillRect(100, simCanvas.height - 35, 300, 25);
 
-            // Letras N y S centradas en los imanes
             simCtx.fillStyle = '#FFFFFF';
             simCtx.font = 'bold 16px sans-serif';
             simCtx.textAlign = 'center';
@@ -294,7 +297,6 @@
             simCtx.fillText('N', cx, 22);
             simCtx.fillText('S', cx, simCanvas.height - 22);
 
-            // Dibujar líneas de campo magnético (gris oscuro para fondo blanco)
             simCtx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
             simCtx.lineWidth = 1;
             simCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
@@ -305,8 +307,6 @@
                     simCtx.moveTo(x, 35);
                     simCtx.lineTo(x, simCanvas.height - 35);
                     simCtx.stroke();
-                    
-                    // Flechas
                     simCtx.beginPath();
                     simCtx.moveTo(x - 3, cy);
                     simCtx.lineTo(x, cy + 5);
@@ -325,7 +325,6 @@
             const px2 = cx - loopRadius * Math.cos(theta);
             const py2 = cy - loopRadius * Math.sin(theta);
 
-            // Dibujar espira (azul oscuro para destacar)
             simCtx.strokeStyle = '#0056b3'; 
             simCtx.lineWidth = 4;
             simCtx.beginPath();
@@ -333,7 +332,6 @@
             simCtx.lineTo(px1, py1);
             simCtx.stroke();
 
-            // Puntos de los extremos (naranja)
             simCtx.fillStyle = '#ff9800';
             simCtx.beginPath();
             simCtx.arc(px1, py1, 5, 0, Math.PI * 2);
@@ -345,16 +343,14 @@
             graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
             const cy = graphCanvas.height / 2;
 
-            // Eje central
-            graphCtx.strokeStyle = '#cccccc'; // Eje gris claro
+            graphCtx.strokeStyle = '#cccccc'; 
             graphCtx.lineWidth = 1;
             graphCtx.beginPath();
             graphCtx.moveTo(0, cy);
             graphCtx.lineTo(graphCanvas.width, cy);
             graphCtx.stroke();
 
-            // Dibujar onda
-            graphCtx.strokeStyle = '#d32f2f'; // Rojo intenso
+            graphCtx.strokeStyle = '#d32f2f'; 
             graphCtx.lineWidth = 2;
             graphCtx.beginPath();
             
@@ -375,7 +371,6 @@
             graphCtx.stroke();
         }
 
-        // Iniciar
         requestAnimationFrame(animate);
     </script>
 </body>
