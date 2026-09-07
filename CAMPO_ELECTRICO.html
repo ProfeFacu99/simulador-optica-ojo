@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulador de Campo Eléctrico</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --border-color: #333333;
+            --text-color: #e9ecef;
+            --primary-color: #adb5bd;
+            --positive-color: #e63946;
+            --negative-color: #457b9d;
+            --probe-color: #ffca3a;
+            --meter-color: #00ffcc;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- CONTROLES Y UI --- */
+        #toolbar {
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid #000;
+            padding: 12px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            align-items: center;
+            font-size: 16px; 
+            z-index: 10;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-right: 1px solid var(--border-color);
+            padding-right: 18px;
+        }
+        .control-group:last-child { border-right: none; }
+
+        label { font-weight: 600; font-size: 15px; color: var(--primary-color); }
+
+        select, button {
+            font-family: inherit;
+            font-size: 15px; 
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: #2b2b2b;
+            color: var(--text-color);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        
+        button:active { background: #444; }
+
+        input[type="range"] {
+            accent-color: #888;
+            cursor: pointer;
+            width: 120px;
+        }
+
+        .radio-group { display: flex; gap: 6px; }
+        .radio-btn {
+            padding: 4px 14px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px; 
+            transition: 0.2s;
+        }
+        .pos-btn { background: #3a1619; color: #ff8c96; border-color: #5c161c; }
+        .pos-btn.active { background: var(--positive-color); color: white; border-color: var(--positive-color); box-shadow: 0 0 8px rgba(230, 57, 70, 0.4); }
+        .neg-btn { background: #142836; color: #8cbbe8; border-color: #1b3547; }
+        .neg-btn.active { background: var(--negative-color); color: white; border-color: var(--negative-color); box-shadow: 0 0 8px rgba(69, 123, 157, 0.4); }
+
+        /* --- CONTENEDOR PRINCIPAL --- */
+        #workspace {
+            flex: 1;
+            position: relative;
+            display: flex;
+            overflow: hidden;
+            background-color: #0d0d0d;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* --- PANEL DE SONDA --- */
+        #probe-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            pointer-events: none;
+            min-width: 210px;
+            font-family: monospace;
+            font-size: 15px; 
+        }
+
+        .probe-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            color: #ccc;
+        }
+        
+        #btn-release {
+            pointer-events: auto;
+            width: 100%;
+            margin-top: 12px;
+            background: var(--probe-color);
+            color: #000;
+            border: none;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        #btn-release:active { background: #e0b02b; }
+
+        /* --- RESPONSIVE --- */
+        @media (max-width: 768px) {
+            body { flex-direction: column-reverse; }
+            #toolbar { border-bottom: none; border-top: 1px solid var(--border-color); justify-content: center; }
+            .control-group { border-right: none; padding-right: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; width: 100%; justify-content: space-between; }
+            .control-group:last-child { border-bottom: none; }
+            #probe-panel { top: 10px; right: 10px; bottom: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="workspace">
+        <canvas id="simCanvas"></canvas>
+        <div id="probe-panel">
+            <div style="font-family: system-ui; font-weight: bold; margin-bottom: 8px; font-size: 16px; color: #fff;">Carga de Prueba (q₀)</div>
+            <div class="probe-row"><span>|E|:</span> <span id="val-E">0.00 N/C</span></div>
+            <div class="probe-row"><span>Ángulo:</span> <span id="val-ang">0°</span></div>
+            <div class="probe-row"><span>|F|:</span> <span id="val-F">0.00 N</span></div>
+            <button id="btn-release">SOLTAR CARGA</button>
+        </div>
+    </div>
+
+    <div id="toolbar">
+        <div class="control-group">
+            <label>Nueva Carga:</label>
+            <div class="radio-group" id="sign-selector">
+                <div class="radio-btn pos-btn active" data-val="1">+</div>
+                <div class="radio-btn neg-btn" data-val="-1">−</div>
+            </div>
+            <input type="range" id="mag-slider" min="1" max="5" value="3" title="Magnitud (|Q|)">
+            <span id="mag-label" style="font-family: monospace; font-size: 15px; color: var(--primary-color);">3 µC</span>
+        </div>
+        <div class="control-group">
+            <label>Vista:</label>
+            <select id="view-mode">
+                <option value="vector">Grilla de Vectores</option>
+                <option value="lines">Líneas de Campo</option>
+                <option value="both">Líneas + Vectores</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <button id="btn-reset">Restablecer Lienzo</button>
+        </div>
+        <div style="font-size: 13px; color: #888; margin-left: auto;">
+            Clic: colocar | Arrastrar: mover | Doble clic: borrar
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ==========================================
+         * PARÁMETROS FÍSICOS Y COLORES
+         * ==========================================
+         */
+        const k_e = 1000;
+        const q_test = 1; 
+        const m_test = 50;
+        const waveSpeed = 0.5;
+        const chargeRadius = 18; 
+        const exclusionZone = 28;
+        let gridSpacing = 38;
+
+        const COLOR_POS = '#e63946';
+        const COLOR_NEG = '#457b9d';
+        const COLOR_PROBE = '#ffca3a';
+        const COLOR_METER = '#00ffcc';
+        const COLOR_BG = '#0d0d0d';
+
+        let charges = [];
+        let deletedWaves = [];
+        
+        let testCharge = { x: 0, y: 0, active: false, vx: 0, vy: 0, path: [], dragging: false };
+        let eMeter = { x: 0, y: 0, dragging: false }; 
+        let grid = [];
+        
+        let currentSign = 1;
+        let currentMag = 3; 
+        let viewMode = 'vector'; 
+
+        let draggedCharge = null;
+        let isDragging = false;
+        let lastTime = 0;
+        
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        /**
+         * INICIALIZACIÓN
+         */
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            gridSpacing = Math.max(35, Math.min(canvas.width, canvas.height) / 22);
+            
+            if (!testCharge.active && (testCharge.x === 0 || testCharge.x > canvas.width || testCharge.y > canvas.height)) {
+                testCharge.x = canvas.width / 2 + 100;
+                testCharge.y = canvas.height - 120;
+            }
+            if (eMeter.x === 0 || eMeter.x > canvas.width || eMeter.y > canvas.height) {
+                eMeter.x = canvas.width / 2 - 100;
+                eMeter.y = canvas.height - 120;
+            }
+
+            initGrid();
+        }
+
+        function initGrid() {
+            grid = [];
+            const cols = Math.floor(canvas.width / gridSpacing) + 1;
+            const rows = Math.floor(canvas.height / gridSpacing) + 1;
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    grid.push({ x: i * gridSpacing, y: j * gridSpacing, cx: 0, cy: 0 });
+                }
+            }
+        }
+
+        window.addEventListener('resize', resize);
+
+        /**
+         * NÚCLEO FÍSICO
+         */
+        function calculateField(x, y, time) {
+            let ex = 0, ey = 0;
+
+            for (let c of charges) {
+                const dx = x - c.x;
+                const dy = y - c.y;
+                const r2 = dx * dx + dy * dy;
+                if (r2 < 10) continue; 
+                
+                const r = Math.sqrt(r2);
+                const waveRadius = (time - c.addedAt) * waveSpeed;
+                
+                if (c.isDragging || r <= waveRadius) {
+                    const mag = (k_e * (c.q * c.sign)) / r2;
+                    ex += mag * (dx / r);
+                    ey += mag * (dy / r);
+                }
+            }
+
+            for (let w of deletedWaves) {
+                const dx = x - w.x;
+                const dy = y - w.y;
+                const r2 = dx * dx + dy * dy;
+                if (r2 < 10) continue;
+                
+                const r = Math.sqrt(r2);
+                const waveRadius = (time - w.deletedAt) * waveSpeed;
+                
+                if (r > waveRadius) {
+                    const mag = (k_e * (w.q * w.sign)) / r2;
+                    ex += mag * (dx / r);
+                    ey += mag * (dy / r);
+                }
+            }
+            return { ex, ey };
+        }
+
+        /**
+         * ANIMACIÓN Y ACTUALIZACIÓN
+         */
+        function loop(timestamp) {
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+            updatePhysics(timestamp, dt);
+            draw(timestamp);
+            requestAnimationFrame(loop);
+        }
+
+        function updatePhysics(time, dt) {
+            const maxScreenDist = Math.sqrt(canvas.width**2 + canvas.height**2);
+            deletedWaves = deletedWaves.filter(w => (time - w.deletedAt) * waveSpeed < maxScreenDist);
+
+            if (testCharge && !testCharge.active) {
+                const E = calculateField(testCharge.x, testCharge.y, time);
+                const magE = Math.sqrt(E.ex**2 + E.ey**2);
+                let angE = Math.atan2(E.ey, E.ex) * (180 / Math.PI);
+                if (angE < 0) angE += 360;
+                
+                document.getElementById('val-E').textContent = magE.toFixed(2) + " N/C";
+                document.getElementById('val-ang').textContent = Math.round(angE) + "°";
+                document.getElementById('val-F').textContent = (magE * q_test).toFixed(2) + " N";
+            }
+
+            if (testCharge.active && !testCharge.dragging) {
+                const E = calculateField(testCharge.x, testCharge.y, time);
+                testCharge.vx += ((E.ex * q_test) / m_test) * (dt/16); 
+                testCharge.vy += ((E.ey * q_test) / m_test) * (dt/16);
+                testCharge.vx *= 0.99;
+                testCharge.vy *= 0.99;
+                testCharge.x += testCharge.vx * (dt/16);
+                testCharge.y += testCharge.vy * (dt/16);
+                
+                if (testCharge.path.length === 0 || 
+                    Math.hypot(testCharge.x - testCharge.path[testCharge.path.length-1].x, 
+                               testCharge.y - testCharge.path[testCharge.path.length-1].y) > 2) {
+                    testCharge.path.push({x: testCharge.x, y: testCharge.y});
+                    if (testCharge.path.length > 300) testCharge.path.shift();
+                }
+
+                if (testCharge.x < 0 || testCharge.x > canvas.width || testCharge.y < 0 || testCharge.y > canvas.height) {
+                    testCharge.active = false;
+                }
+                for (let c of charges) {
+                    if (Math.hypot(testCharge.x - c.x, testCharge.y - c.y) < chargeRadius * 1.2) {
+                        testCharge.active = false;
+                        testCharge.vx = 0; testCharge.vy = 0;
+                    }
+                }
+            }
+        }
+
+        /**
+         * RENDERIZADO VISUAL
+         */
+        function draw(time) {
+            ctx.fillStyle = COLOR_BG;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (viewMode === 'lines' || viewMode === 'both') drawFieldLines(time);
+            if (viewMode === 'vector' || viewMode === 'both') drawVectors(time);
+
+            drawTestChargePath();
+            drawTestCharge();
+            drawMeter(time); 
+            drawCharges();
+        }
+
+        function drawVectors(time) {
+            ctx.lineWidth = 1.5;
+            for (let node of grid) {
+                let excluded = false;
+                for (let c of charges) {
+                    if (Math.hypot(node.x - c.x, node.y - c.y) < exclusionZone) { excluded = true; break; }
+                }
+                if (excluded) continue;
+
+                const targetE = calculateField(node.x, node.y, time);
+                node.cx += (targetE.ex - node.cx) * 0.2;
+                node.cy += (targetE.ey - node.cy) * 0.2;
+
+                const mag = Math.sqrt(node.cx**2 + node.cy**2);
+                
+                if (mag < 0.001) {
+                    ctx.fillStyle = '#333';
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 1, 0, Math.PI*2);
+                    ctx.fill();
+                    continue;
+                }
+
+                const maxLen = gridSpacing * 0.85;
+                const minLen = gridSpacing * 0.35; 
+                const scaledMag = Math.pow(mag, 0.25); 
+                const displayLen = Math.min(maxLen, minLen + scaledMag * gridSpacing * 0.4);
+                
+                const dirX = (node.cx / mag) * displayLen;
+                const dirY = (node.cy / mag) * displayLen;
+
+                const alpha = Math.min(0.85, 0.15 + scaledMag * 0.6);
+                
+                ctx.strokeStyle = `rgba(220, 225, 230, ${alpha})`;
+                ctx.fillStyle = `rgba(220, 225, 230, ${alpha})`;
+                
+                ctx.beginPath();
+                ctx.moveTo(node.x - dirX/2, node.y - dirY/2);
+                ctx.lineTo(node.x + dirX/2, node.y + dirY/2);
+                
+                const arrowSize = Math.min(5, displayLen * 0.35);
+                const angle = Math.atan2(dirY, dirX);
+                
+                ctx.lineTo(node.x + dirX/2 - arrowSize * Math.cos(angle - Math.PI/6), node.y + dirY/2 - arrowSize * Math.sin(angle - Math.PI/6));
+                ctx.lineTo(node.x + dirX/2 - arrowSize * Math.cos(angle + Math.PI/6), node.y + dirY/2 - arrowSize * Math.sin(angle + Math.PI/6));
+                ctx.lineTo(node.x + dirX/2, node.y + dirY/2);
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+
+        function drawFieldLines(time) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = 1.2;
+            const step = 6;
+            const maxSteps = 1500; 
+            
+            function getNormDir(px, py) {
+                const E = calculateField(px, py, time);
+                const m = Math.hypot(E.ex, E.ey);
+                if (m < 0.0001) return { x: 0, y: 0 };
+                return { x: E.ex / m, y: E.ey / m };
+            }
+
+            for (let c of charges) {
+                const numLines = 10 * c.q; 
+                const angleOffset = Math.PI / numLines; 
+
+                for(let i=0; i<numLines; i++) {
+                    const angle = (i / numLines) * Math.PI * 2 + angleOffset;
+                    let x = c.x + Math.cos(angle) * (chargeRadius + 1);
+                    let y = c.y + Math.sin(angle) * (chargeRadius + 1);
+                    
+                    let signMult = c.sign > 0 ? 1 : -1;
+                    
+                    let path = [{x: x, y: y}];
+                    let hitPositive = false;
+                    
+                    for(let s=0; s<maxSteps; s++) { 
+                        const k1 = getNormDir(x, y);
+                        if(k1.x === 0 && k1.y === 0) break; 
+                        
+                        const k2 = getNormDir(x + k1.x * step/2 * signMult, y + k1.y * step/2 * signMult);
+                        const k3 = getNormDir(x + k2.x * step/2 * signMult, y + k2.y * step/2 * signMult);
+                        const k4 = getNormDir(x + k3.x * step * signMult, y + k3.y * step * signMult);
+                        
+                        const dx = (k1.x + 2*k2.x + 2*k3.x + k4.x) / 6;
+                        const dy = (k1.y + 2*k2.y + 2*k3.y + k4.y) / 6;
+                        
+                        x += dx * step * signMult;
+                        y += dy * step * signMult;
+                        
+                        path.push({x: x, y: y});
+                        
+                        if(x < 0 || x > canvas.width || y < 0 || y > canvas.height) break;
+                        
+                        let hitOther = false;
+                        for(let c2 of charges) {
+                            if(c2 !== c && Math.hypot(x-c2.x, y-c2.y) < chargeRadius) { 
+                                hitOther = true;
+                                // Si choca con una positiva, lo marcamos
+                                if (c2.sign > 0) hitPositive = true;
+                                break; 
+                            }
+                        }
+                        if(hitOther) break;
+                    }
+
+                    // SOLUCIÓN AL DUPLICADO DE LÍNEAS (+ y -):
+                    // Si es una carga positiva, siempre dibujamos su ruta.
+                    // Si es una carga negativa, SOLO la dibujamos si no terminó chocando con una positiva 
+                    // (porque si chocó, significa que la carga positiva ya dibujó esa misma línea exacta).
+                    if (c.sign > 0 || (c.sign < 0 && !hitPositive)) {
+                        ctx.beginPath();
+                        ctx.moveTo(path[0].x, path[0].y);
+                        for (let p = 1; p < path.length; p++) {
+                            ctx.lineTo(path[p].x, path[p].y);
+                        }
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function drawMeter(time) {
+            ctx.beginPath();
+            ctx.arc(eMeter.x, eMeter.y, 10, 0, Math.PI * 2);
+            ctx.strokeStyle = COLOR_METER;
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(eMeter.x - 15, eMeter.y); ctx.lineTo(eMeter.x + 15, eMeter.y);
+            ctx.moveTo(eMeter.x, eMeter.y - 15); ctx.lineTo(eMeter.x, eMeter.y + 15);
+            ctx.stroke();
+
+            const E = calculateField(eMeter.x, eMeter.y, time);
+            const mag = Math.hypot(E.ex, E.ey);
+            const magText = mag.toFixed(2);
+
+            ctx.fillStyle = COLOR_METER;
+            ctx.font = 'bold 14px monospace'; 
+            ctx.textAlign = 'left';
+            
+            // Evaluamos el texto redondeado: si dice "0.00", se sobreentiende como cero real.
+            if (parseFloat(magText) > 0.00) {
+                // Longitud proporcional al módulo (lineal), con un máximo de 120px para que no se salga de control
+                const displayLen = Math.min(120, mag * 65); 
+                
+                if (displayLen > 3) {
+                    const dirX = (E.ex / mag) * displayLen;
+                    const dirY = (E.ey / mag) * displayLen;
+
+                    ctx.beginPath();
+                    ctx.moveTo(eMeter.x, eMeter.y);
+                    ctx.lineTo(eMeter.x + dirX, eMeter.y + dirY);
+                    
+                    const arrowSize = 7;
+                    const angle = Math.atan2(dirY, dirX);
+                    ctx.lineTo(eMeter.x + dirX - arrowSize * Math.cos(angle - Math.PI/6), eMeter.y + dirY - arrowSize * Math.sin(angle - Math.PI/6));
+                    ctx.moveTo(eMeter.x + dirX, eMeter.y + dirY);
+                    ctx.lineTo(eMeter.x + dirX - arrowSize * Math.cos(angle + Math.PI/6), eMeter.y + dirY - arrowSize * Math.sin(angle + Math.PI/6));
+                    ctx.stroke();
+                }
+
+                ctx.fillText(`${magText} N/C`, eMeter.x + 18, eMeter.y - 15);
+            } else {
+                ctx.fillText(`0.00 N/C`, eMeter.x + 18, eMeter.y - 15);
+            }
+
+            if (!eMeter.dragging) {
+                ctx.fillStyle = '#888';
+                ctx.font = '13px system-ui'; 
+                ctx.textAlign = 'center';
+                ctx.fillText('Sensor (arrastrar)', eMeter.x, eMeter.y + 28);
+            }
+        }
+
+        function drawCharges() {
+            for (let c of charges) {
+                ctx.shadowColor = c.sign > 0 ? COLOR_POS : COLOR_NEG;
+                ctx.shadowBlur = 18;
+                
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, chargeRadius, 0, Math.PI * 2);
+                ctx.fillStyle = c.sign > 0 ? COLOR_POS : COLOR_NEG;
+                ctx.fill();
+                
+                ctx.shadowBlur = 0; 
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 22px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const char = c.sign > 0 ? '+' : '−';
+                ctx.fillText(char, c.x, c.y + 1); 
+                
+                if (c.q > 1) {
+                    ctx.beginPath();
+                    ctx.arc(c.x, c.y, chargeRadius + 4, 0, Math.PI * 2);
+                    ctx.strokeStyle = c.sign > 0 ? 'rgba(230, 57, 70, 0.6)' : 'rgba(69, 123, 157, 0.6)';
+                    ctx.lineWidth = c.q * 0.9;
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#aaaaaa';
+                ctx.font = 'bold 13px system-ui';
+                ctx.fillText(`${c.sign > 0 ? '+' : '-'}${c.q} µC`, c.x, c.y + chargeRadius + 20);
+            }
+        }
+
+        function drawTestCharge() {
+            const size = 20; 
+            
+            ctx.fillStyle = COLOR_PROBE;
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            ctx.rect(testCharge.x - size/2, testCharge.y - size/2, size, size);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 15px monospace'; 
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            if (testCharge.dragging) {
+                ctx.beginPath();
+                ctx.arc(testCharge.x, testCharge.y, size * 1.5, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 202, 58, 0.8)';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.fillText('q₀', testCharge.x, testCharge.y);
+            } else {
+                ctx.fillText('q₀', testCharge.x, testCharge.y);
+                if (!testCharge.active) {
+                    ctx.fillStyle = '#aaaaaa';
+                    ctx.font = '13px system-ui'; 
+                    ctx.fillText('Sonda (arrastrar)', testCharge.x, testCharge.y - size - 14);
+                }
+            }
+        }
+
+        function drawTestChargePath() {
+            if (testCharge.path.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(testCharge.path[0].x, testCharge.path[0].y);
+            for (let i = 1; i < testCharge.path.length; i++) {
+                ctx.lineTo(testCharge.path[i].x, testCharge.path[i].y);
+            }
+            ctx.strokeStyle = 'rgba(255, 202, 58, 0.9)';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        /**
+         * INTERACCIÓN (MOUSE/TOUCH)
+         */
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        let lastClickTime = 0;
+        let lastClickPos = {x:0, y:0};
+
+        canvas.addEventListener('pointerdown', (e) => {
+            const pos = getPointerPos(e);
+            const now = performance.now();
+            const isDblClick = (now - lastClickTime < 300) && (Math.hypot(pos.x - lastClickPos.x, pos.y - lastClickPos.y) < 20);
+            lastClickTime = now;
+            lastClickPos = pos;
+
+            if (Math.hypot(pos.x - eMeter.x, pos.y - eMeter.y) < 30) {
+                eMeter.dragging = true;
+                canvas.setPointerCapture(e.pointerId);
+                return;
+            }
+
+            if (Math.hypot(pos.x - testCharge.x, pos.y - testCharge.y) < 30) {
+                testCharge.dragging = true;
+                testCharge.active = false; 
+                testCharge.vx = 0; testCharge.vy = 0;
+                testCharge.path = []; 
+                canvas.setPointerCapture(e.pointerId);
+                return;
+            }
+
+            for (let i = charges.length - 1; i >= 0; i--) {
+                let c = charges[i];
+                if (Math.hypot(pos.x - c.x, pos.y - c.y) < chargeRadius * 1.5) {
+                    if (isDblClick) {
+                        deletedWaves.push({ x: c.x, y: c.y, q: c.q, sign: c.sign, deletedAt: now });
+                        charges.splice(i, 1);
+                    } else {
+                        draggedCharge = c;
+                        isDragging = true;
+                        c.isDragging = true;
+                    }
+                    canvas.setPointerCapture(e.pointerId);
+                    return;
+                }
+            }
+
+            if (!isDblClick) {
+                charges.push({
+                    x: pos.x,
+                    y: pos.y,
+                    sign: currentSign,
+                    q: currentMag,
+                    addedAt: performance.now(),
+                    isDragging: false
+                });
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            const pos = getPointerPos(e);
+            if (eMeter.dragging) {
+                eMeter.x = pos.x;
+                eMeter.y = pos.y;
+            } else if (testCharge.dragging) {
+                testCharge.x = pos.x;
+                testCharge.y = pos.y;
+            } else if (isDragging && draggedCharge) {
+                draggedCharge.x = pos.x;
+                draggedCharge.y = pos.y;
+            }
+        });
+
+        canvas.addEventListener('pointerup', (e) => {
+            eMeter.dragging = false;
+            testCharge.dragging = false;
+            if (isDragging && draggedCharge) {
+                draggedCharge.isDragging = false;
+                draggedCharge = null;
+                isDragging = false;
+            }
+            canvas.releasePointerCapture(e.pointerId);
+        });
+
+        /**
+         * EVENTOS UI
+         */
+        document.querySelectorAll('.radio-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentSign = parseInt(btn.dataset.val);
+            });
+        });
+
+        const magSlider = document.getElementById('mag-slider');
+        const magLabel = document.getElementById('mag-label');
+        magSlider.addEventListener('input', (e) => {
+            currentMag = parseInt(e.target.value);
+            magLabel.textContent = `${currentMag} µC`;
+        });
+
+        document.getElementById('view-mode').addEventListener('change', (e) => {
+            viewMode = e.target.value;
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            charges = [];
+            deletedWaves = [];
+            testCharge.active = false;
+            testCharge.path = [];
+            testCharge.vx = 0; testCharge.vy = 0;
+            testCharge.x = canvas.width / 2 + 100;
+            testCharge.y = canvas.height - 120;
+            eMeter.x = canvas.width / 2 - 100;
+            eMeter.y = canvas.height - 120;
+            for(let n of grid) { n.cx = 0; n.cy = 0; }
+        });
+
+        const btnRelease = document.getElementById('btn-release');
+        btnRelease.addEventListener('click', () => {
+            if (testCharge.active) {
+                testCharge.active = false;
+                testCharge.vx = 0; testCharge.vy = 0;
+                btnRelease.textContent = "SOLTAR CARGA";
+            } else {
+                testCharge.active = true;
+                testCharge.path = [{x: testCharge.x, y: testCharge.y}];
+                btnRelease.textContent = "DETENER CARGA";
+            }
+        });
+
+        // Inicio
+        resize();
+        lastTime = performance.now();
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>
