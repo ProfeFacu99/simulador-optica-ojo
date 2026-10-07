@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graficador de Datos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Ajuste de contraste: colores más oscuros y definidos */
+        :root {
+            --primary: #1d4ed8; 
+            --primary-hover: #1e3a8a;
+            --bg: #e2e8f0; 
+            --surface: #ffffff;
+            --border: #94a3b8; 
+            --text: #0f172a; 
+            --text-light: #334155; 
+            --radius: 6px;
+        }
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+        body { margin: 0; padding: 1rem; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
+        .container { display: flex; flex-wrap: wrap; gap: 1.5rem; flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; }
+        
+        .panel-left, .panel-right { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel-left { flex: 1; min-width: 320px; overflow-y: auto; }
+        .panel-right { flex: 2; min-width: 400px; }
+
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .panel-right { min-width: 100%; }
+        }
+
+        .controls-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+        button { background: var(--surface); border: 1px solid var(--border); padding: 0.4rem 0.8rem; border-radius: var(--radius); cursor: pointer; color: var(--text); font-weight: 500; font-size: 0.9rem; transition: 0.2s; }
+        button:hover { border-color: var(--primary); color: var(--primary); background: #f8fafc; }
+        button.primary { background: var(--primary); color: white; border: none; }
+        button.primary:hover { background: var(--primary-hover); color: white; }
+
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid var(--border); padding: 0; min-width: 100px; position: relative; }
+        th { background: #f1f5f9; padding: 0.4rem; font-weight: normal; }
+        .th-inputs { display: flex; flex-direction: column; gap: 0.2rem; }
+        input { width: 100%; border: none; padding: 0.5rem; background: transparent; color: var(--text); text-align: center; font-size: 0.95rem; outline: none; }
+        input:focus { background: #eff6ff; }
+        input::placeholder { color: #94a3b8; } /* Placeholder gris claro */
+        th input.col-name { font-weight: 600; }
+        th input.col-unit { font-size: 0.85rem; color: var(--text-light); }
+        .delete-col, .delete-row { position: absolute; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-size: 0.8rem; cursor: pointer; opacity: 0; display: flex; align-items: center; justify-content: center; font-weight: bold;}
+        .delete-col { top: -10px; right: -10px; width: 22px; height: 22px; border-radius: 50%; }
+        .delete-row { left: -10px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; z-index: 10; }
+        th:hover .delete-col, td:first-child:hover .delete-row { opacity: 1; }
+
+        .select-group { display: flex; gap: 0.5rem; align-items: center; font-size: 0.95rem; font-weight: 500; margin-right: 1rem;}
+        select { padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; color: var(--text); outline: none; background: var(--surface); cursor: pointer; }
+        select:focus { border-color: var(--primary); }
+        
+        .chart-container { flex: 1; position: relative; width: 100%; min-height: 300px; margin-top: 1rem; }
+        #fit-results { margin-top: 1rem; padding: 0.8rem; background: #f1f5f9; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.95rem; min-height: 3.5rem; display: flex; flex-direction: column; justify-content: center; gap: 0.3rem;}
+        .error-msg { color: #dc2626; font-weight: 500; }
+        .fit-eq { font-weight: bold; font-size: 1.05rem; }
+        .fit-params { color: var(--text-light); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel-left">
+        <div class="controls-row">
+            <button onclick="addRow()">+ Fila</button>
+            <button onclick="addColumn()">+ Columna</button>
+        </div>
+        <div class="table-wrapper">
+            <table id="data-table">
+                <thead>
+                    <tr id="table-head"></tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="panel-right">
+        <div class="controls-row">
+            <div class="select-group">
+                <label>Eje X:</label>
+                <select id="sel-x" onchange="updateChart()"></select>
+            </div>
+            <div class="select-group">
+                <label>Eje Y:</label>
+                <select id="sel-y" onchange="updateChart()"></select>
+            </div>
+            <div class="select-group">
+                <label>Ajuste:</label>
+                <select id="sel-fit" onchange="updateChart()">
+                    <option value="none">Ninguno</option>
+                    <option value="linear">Lineal</option>
+                    <option value="exp">Exponencial</option>
+                    <option value="power">Potencia</option>
+                </select>
+            </div>
+            <button class="primary" onclick="downloadChart()" style="margin-left: auto;">Descargar PNG</button>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart"></canvas>
+        </div>
+        <div id="fit-results">Selecciona un ajuste para ver los parámetros.</div>
+    </div>
+</div>
+
+<script>
+    // Valores por defecto vacíos
+    let columns = [
+        { name: "Tiempo", unit: "s" },
+        { name: "", unit: "" }
+    ];
+    let data = [
+        ["", ""], ["", ""], ["", ""], ["", ""], ["", ""]
+    ];
+    
+    let chartInstance = null;
+
+    function init() {
+        renderTable();
+        updateSelects();
+        initChart();
+        setupPaste();
+    }
+
+    function renderTable() {
+        const head = document.getElementById('table-head');
+        head.innerHTML = '';
+        columns.forEach((col, cIdx) => {
+            const th = document.createElement('th');
+            th.innerHTML = `
+                ${columns.length > 2 ? `<button class="delete-col" onclick="deleteColumn(${cIdx})" title="Eliminar columna">×</button>` : ''}
+                <div class="th-inputs">
+                    <input class="col-name" type="text" value="${col.name}" oninput="updateColumnName(${cIdx}, this.value)" placeholder="Variable">
+                    <input class="col-unit" type="text" value="${col.unit}" oninput="updateColumnUnit(${cIdx}, this.value)" placeholder="Unidad">
+                </div>
+            `;
+            head.appendChild(th);
+        });
+
+        const body = document.getElementById('table-body');
+        body.innerHTML = '';
+        data.forEach((row, rIdx) => {
+            const tr = document.createElement('tr');
+            row.forEach((val, cIdx) => {
+                const td = document.createElement('td');
+                if (cIdx === 0 && data.length > 2) {
+                    td.innerHTML += `<button class="delete-row" onclick="deleteRow(${rIdx})" title="Eliminar fila">×</button>`;
+                }
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = val;
+                input.dataset.r = rIdx;
+                input.dataset.c = cIdx;
+                input.oninput = (e) => { data[rIdx][cIdx] = e.target.value; updateChart(); };
+                input.onkeydown = handleCellKey;
+                td.appendChild(input);
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+    }
+
+    function addRow() {
+        data.push(Array(columns.length).fill(""));
+        renderTable();
+    }
+
+    function deleteRow(rIdx) {
+        data.splice(rIdx, 1);
+        renderTable();
+        updateChart();
+    }
+
+    function addColumn() {
+        columns.push({ name: "", unit: "" });
+        data.forEach(row => row.push(""));
+        renderTable();
+        updateSelects();
+    }
+
+    function deleteColumn(cIdx) {
+        columns.splice(cIdx, 1);
+        data.forEach(row => row.splice(cIdx, 1));
+        renderTable();
+        updateSelects();
+    }
+
+    function updateColumnName(cIdx, val) { columns[cIdx].name = val; updateSelects(); updateChart(); }
+    function updateColumnUnit(cIdx, val) { columns[cIdx].unit = val; updateChart(); }
+
+    function handleCellKey(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const r = parseInt(e.target.dataset.r);
+            const c = parseInt(e.target.dataset.c);
+            if (r + 1 < data.length) {
+                document.querySelector(`input[data-r="${r + 1}"][data-c="${c}"]`)?.focus();
+            } else {
+                addRow();
+                setTimeout(() => document.querySelector(`input[data-r="${r + 1}"][data-c="${c}"]`)?.focus(), 0);
+            }
+        }
+    }
+
+    function setupPaste() {
+        document.getElementById('table-body').addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasteData = (e.clipboardData || window.clipboardData).getData('text');
+            const rows = pasteData.trim().split(/\r?\n/);
+            const target = e.target;
+            if (target.tagName !== 'INPUT') return;
+            
+            const startR = parseInt(target.dataset.r);
+            const startC = parseInt(target.dataset.c);
+
+            rows.forEach((rowStr, i) => {
+                const rIdx = startR + i;
+                if (rIdx >= data.length) addRow();
+                const cells = rowStr.split('\t');
+                
+                cells.forEach((cellVal, j) => {
+                    const cIdx = startC + j;
+                    while (cIdx >= columns.length) addColumn();
+                    data[rIdx][cIdx] = cellVal.trim();
+                });
+            });
+            renderTable();
+            updateChart();
+        });
+    }
+
+    function updateSelects() {
+        const selX = document.getElementById('sel-x');
+        const selY = document.getElementById('sel-y');
+        const currX = selX.value || "0";
+        const currY = selY.value || "1";
+        
+        selX.innerHTML = ''; selY.innerHTML = '';
+        columns.forEach((col, i) => {
+            const label = col.name || `Columna ${i+1}`;
+            selX.innerHTML += `<option value="${i}">${label}</option>`;
+            selY.innerHTML += `<option value="${i}">${label}</option>`;
+        });
+        
+        selX.value = currX < columns.length ? currX : "0";
+        selY.value = currY < columns.length ? currY : (columns.length > 1 ? "1" : "0");
+    }
+
+    function parseNum(val) {
+        if (val === "" || val === null || val === undefined) return NaN;
+        return parseFloat(String(val).replace(',', '.'));
+    }
+
+    function getValidData(xIdx, yIdx) {
+        let pts = [];
+        data.forEach(row => {
+            const x = parseNum(row[xIdx]);
+            const y = parseNum(row[yIdx]);
+            if (!isNaN(x) && !isNaN(y)) pts.push({x, y});
+        });
+        return pts.sort((a,b) => a.x - b.x);
+    }
+
+    function formatNum(num) {
+        if (Math.abs(num) < 0.001 || Math.abs(num) > 9999) return num.toExponential(3);
+        return num.toPrecision(4);
+    }
+
+    function calcFits(pts, type) {
+        const n = pts.length;
+        if (n < 2) return { error: "Datos insuficientes para realizar un ajuste." };
+
+        let x = [], y = [];
+        for (let p of pts) {
+            if (type === 'exp' && p.y <= 0) return { error: "Los valores de Y deben ser > 0 para el ajuste exponencial." };
+            if (type === 'power' && (p.x <= 0 || p.y <= 0)) return { error: "X e Y deben ser > 0 para el ajuste de potencia." };
+            x.push(type === 'power' ? Math.log(p.x) : p.x);
+            y.push((type === 'exp' || type === 'power') ? Math.log(p.y) : p.y);
+        }
+
+        let sumX=0, sumY=0, sumXY=0, sumXX=0, sumYY=0;
+        for (let i=0; i<n; i++) { sumX+=x[i]; sumY+=y[i]; sumXY+=x[i]*y[i]; sumXX+=x[i]*x[i]; sumYY+=y[i]*y[i]; }
+        
+        const denom = (n*sumXX - sumX*sumX);
+        if (denom === 0) return { error: "Los valores de X son constantes, no se puede ajustar." };
+
+        const m = (n*sumXY - sumX*sumY) / denom;
+        const b = (sumY - m*sumX) / n;
+        const r2 = Math.pow((n*sumXY - sumX*sumY) / Math.sqrt(denom * (n*sumYY - sumY*sumY)), 2);
+
+        let eq = "", params = "", curve = [];
+        const minX = pts[0].x, maxX = pts[pts.length-1].x;
+        const step = (maxX - minX) / 100;
+
+        if (type === 'linear') {
+            let ssRes = 0, ssX = 0, xMean = sumX/n;
+            for(let i=0; i<n; i++) {
+                ssRes += Math.pow(y[i] - (m*x[i] + b), 2);
+                ssX += Math.pow(x[i] - xMean, 2);
+            }
+            const s = Math.sqrt(ssRes/(n-2));
+            const seM = s / Math.sqrt(ssX);
+            const seB = s * Math.sqrt(1/n + (xMean*xMean)/ssX);
+
+            eq = `y = a·x + b`;
+            params = `Pendiente (a) = ${formatNum(m)} ± ${formatNum(seM)} &nbsp;|&nbsp; Ordenada (b) = ${formatNum(b)} ± ${formatNum(seB)} &nbsp;|&nbsp; R² = ${formatNum(r2)}`;
+            for (let i=0; i<=100; i++) { let px = minX + i*step; curve.push({x: px, y: m*px + b}); }
+        } 
+        else if (type === 'exp') {
+            const A = Math.exp(b);
+            eq = `y = A · e^(k·x)`;
+            params = `Coeficiente (A) = ${formatNum(A)} &nbsp;|&nbsp; Constante (k) = ${formatNum(m)} &nbsp;|&nbsp; R² = ${formatNum(r2)}`;
+            for (let i=0; i<=100; i++) { let px = minX + i*step; curve.push({x: px, y: A*Math.exp(m*px)}); }
+        } 
+        else if (type === 'power') {
+            const A = Math.exp(b);
+            eq = `y = A · x^n`;
+            params = `Coeficiente (A) = ${formatNum(A)} &nbsp;|&nbsp; Exponente (n) = ${formatNum(m)} &nbsp;|&nbsp; R² = ${formatNum(r2)}`;
+            for (let i=0; i<=100; i++) { let px = minX + i*step; curve.push({x: px, y: A*Math.pow(px, m)}); }
+        }
+
+        return { eq, params, curve };
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('chart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets: [] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { type: 'linear', position: 'bottom', title: { display: true, text: 'X', font: { weight: 'bold' } }, grid: { color: '#e2e8f0' } },
+                    y: { title: { display: true, text: 'Y', font: { weight: 'bold' } }, grid: { color: '#e2e8f0' } }
+                },
+                animation: false
+            }
+        });
+        updateChart();
+    }
+
+    function updateChart() {
+        if (!chartInstance) return;
+        const xIdx = parseInt(document.getElementById('sel-x').value);
+        const yIdx = parseInt(document.getElementById('sel-y').value);
+        const fitType = document.getElementById('sel-fit').value;
+        const resDiv = document.getElementById('fit-results');
+
+        const colX = columns[xIdx];
+        const colY = columns[yIdx];
+        chartInstance.options.scales.x.title.text = colX.unit ? `${colX.name || `Columna ${xIdx+1}`} (${colX.unit})` : (colX.name || `Columna ${xIdx+1}`);
+        chartInstance.options.scales.y.title.text = colY.unit ? `${colY.name || `Columna ${yIdx+1}`} (${colY.unit})` : (colY.name || `Columna ${yIdx+1}`);
+
+        const pts = getValidData(xIdx, yIdx);
+        let datasets = [{
+            label: 'Datos',
+            data: pts,
+            backgroundColor: 'var(--primary)',
+            pointRadius: 5,
+            pointHoverRadius: 7
+        }];
+
+        resDiv.innerHTML = '<span class="fit-params">Selecciona un ajuste para ver los parámetros.</span>';
+        resDiv.className = '';
+
+        if (fitType !== 'none' && pts.length > 0) {
+            const fit = calcFits(pts, fitType);
+            if (fit.error) {
+                resDiv.innerHTML = fit.error;
+                resDiv.className = 'error-msg';
+            } else {
+                resDiv.innerHTML = `<span class="fit-eq">${fit.eq}</span><span class="fit-params">${fit.params}</span>`;
+                datasets.push({
+                    label: 'Ajuste',
+                    data: fit.curve,
+                    type: 'line',
+                    borderColor: '#dc2626',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.1
+                });
+            }
+        }
+
+        chartInstance.data.datasets = datasets;
+        chartInstance.update();
+    }
+
+    function downloadChart() {
+        const link = document.createElement('a');
+        link.download = 'grafico.png';
+        link.href = document.getElementById('chart').toDataURL('image/png', 1.0);
+        link.click();
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
