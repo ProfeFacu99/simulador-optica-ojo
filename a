@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121316">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Ibanez Electro-Acoustic Studio</title>
+  <style>
+    :root {
+      --bg-dark: #111215;
+      --bg-panel: #1c1e24;
+      --bg-wood: #2b1d14;
+      --bg-wood-light: #3d281c;
+      --fret-metal: #9fa6b2;
+      --nut-bone: #e8dccb;
+      --accent: #e09f3e;
+      --accent-glow: rgba(224, 159, 62, 0.35);
+      --root-color: #e63946;
+      --chord-color: #3b82f6;
+      --scale-color: #10b981;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border: #2e323b;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* BARRA SUPERIOR DE CONTROLES */
+    header {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    select, button {
+      background: #262932;
+      color: var(--text-main);
+      border: 1px solid #3a3f4d;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    button.active {
+      background: var(--accent);
+      color: #111;
+      border-color: var(--accent);
+      box-shadow: 0px 0px 10px var(--accent-glow);
+    }
+
+    .btn-strum-action {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      border-color: #f59e0b;
+      color: #fff;
+    }
+
+    /* BANCO RÁPIDO DE ACORDES (PROGRESIONES) */
+    .quick-bank {
+      background: #16181d;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .slots-container {
+      display: flex;
+      gap: 6px;
+      flex: 1;
+      max-width: 520px;
+    }
+
+    .chord-slot {
+      flex: 1;
+      background: #22252d;
+      border: 1px solid #343844;
+      border-radius: 6px;
+      padding: 6px 4px;
+      text-align: center;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      position: relative;
+    }
+
+    .chord-slot.selected {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: var(--chord-color);
+      color: #fff;
+      box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .chord-slot small {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    .info-pill {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    /* ÁREA PRINCIPAL: DIAPASÓN + STRUM PAD */
+    .workspace {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .fretboard-wrapper {
+      flex: 1;
+      height: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: relative;
+      background: #0d0e11;
+      display: flex;
+      align-items: center;
+    }
+
+    canvas#fretboard {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: pan-x;
+    }
+
+    /* ZONA DE RASGUEO (STRUM PAD DERECHO) */
+    .strum-pad {
+      width: 130px;
+      height: 100%;
+      background: radial-gradient(circle at center, #1a110b 0%, #120c07 75%);
+      border-left: 2px solid #3a2e25;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      touch-action: none;
+      box-shadow: inset 8px 0 20px rgba(0,0,0,0.7);
+    }
+
+    /* Boca acústica decorativa con roseta */
+    .soundhole {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: #070504;
+      box-shadow:
+        inset 0 4px 12px rgba(0,0,0,0.95),
+        0 0 0 4px #5c4028,
+        0 0 0 7px #1f140e,
+        0 0 0 9px #b08968;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .strum-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #8c7a6b;
+      z-index: 2;
+      pointer-events: none;
+      text-align: center;
+    }
+
+    canvas#strumCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 3;
+    }
+
+    @media (max-width: 680px) {
+      .strum-pad {
+        width: 95px;
+      }
+      .soundhole {
+        width: 72px;
+        height: 72px;
+      }
+      .info-pill {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span>🎸 IBANEZ STUDIO</span>
+    </div>
+
+    <div class="controls-row">
+      <label style="font-size:0.75rem; color:var(--text-muted);">Acorde:</label>
+      <select id="chordSelect">
+        <option value="NONE">-- Libre (Notas Sueltas) --</option>
+        <optgroup label="Mayores Abiertos">
+          <option value="C">Do Mayor (C)</option>
+          <option value="D">Re Mayor (D)</option>
+          <option value="E">Mi Mayor (E)</option>
+          <option value="G">Sol Mayor (G)</option>
+          <option value="A">La Mayor (A)</option>
+        </optgroup>
+        <optgroup label="Menores">
+          <option value="Am">La menor (Am)</option>
+          <option value="Dm">Re menor (Dm)</option>
+          <option value="Em" selected>Mi menor (Em)</option>
+          <option value="Bm">Si menor (Bm - Cejilla)</option>
+          <option value="F#m">Fa# menor (F#m)</option>
+        </optgroup>
+        <optgroup label="Séptimas y Cejilla">
+          <option value="F">Fa Mayor (F)</option>
+          <option value="B7">Si Séptima (B7)</option>
+          <option value="E7">Mi Séptima (E7)</option>
+          <option value="A7">La Séptima (A7)</option>
+          <option value="D7">Re Séptima (D7)</option>
+          <option value="G7">Sol Séptima (G7)</option>
+          <option value="Cadd9">Do Novena (Cadd9)</option>
+        </optgroup>
+      </select>
+
+      <button id="btnHoldMode" title="Permite armar tu propio acorde tocando los trastes">✋ Armar Acorde</button>
+
+      <label style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">Escala:</label>
+      <select id="scaleRoot">
+        <option value="NONE">Sin Escala</option>
+        <option value="E">Tónica Mi (E)</option>
+        <option value="A">Tónica La (A)</option>
+        <option value="C">Tónica Do (C)</option>
+        <option value="G">Tónica Sol (G)</option>
+        <option value="D">Tónica Re (D)</option>
+      </select>
+      <select id="scaleType">
+        <option value="minor_pent">Pentatónica Menor</option>
+        <option value="major_pent">Pentatónica Mayor</option>
+        <option value="natural_minor">Menor Natural</option>
+        <option value="major">Mayor Completa</option>
+        <option value="blues">Escala de Blues</option>
+      </select>
+
+      <label style="font-size:0.75rem; color:var(--text-muted); margin-left:4px;">Capo:</label>
+      <select id="capoSelect">
+        <option value="0">Traste 0</option>
+        <option value="1">Traste 1</option>
+        <option value="2">Traste 2</option>
+        <option value="3">Traste 3</option>
+        <option value="4">Traste 4</option>
+        <option value="5">Traste 5</option>
+        <option value="7">Traste 7</option>
+      </select>
+
+      <button id="btnToggleNames" class="active">Notas</button>
+      <button id="btnStrumNow" class="btn-strum-action">🔊 Rasguear</button>
+    </div>
+  </header>
+
+  <div class="quick-bank">
+    <div class="slots-container">
+      <div class="chord-slot selected" data-slot="0" data-chord="Em">Em<small>Slot 1 (Mantener para guardar)</small></div>
+      <div class="chord-slot" data-slot="1" data-chord="G">G<small>Slot 2</small></div>
+      <div class="chord-slot" data-slot="2" data-chord="D">D<small>Slot 3</small></div>
+      <div class="chord-slot" data-slot="3" data-chord="C">C<small>Slot 4</small></div>
+    </div>
+    <div class="info-pill">
+      <span><i class="legend-dot" style="background:var(--chord-color)"></i>Acorde activo</span>
+      <span><i class="legend-dot" style="background:var(--root-color)"></i>Tónica</span>
+      <span><i class="legend-dot" style="background:var(--scale-color)"></i>Escala</span>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="fretboard-wrapper">
+      <canvas id="fretboard"></canvas>
+    </div>
+    <div class="strum-pad" id="strumPad">
+      <div class="strum-label">Rasguear<br>aquí ↕</div>
+      <div class="soundhole"></div>
+      <canvas id="strumCanvas"></canvas>
+      <div class="strum-label" id="activeChordBadge" style="color:var(--accent); font-weight:700; font-size:0.85rem;">Em</div>
+    </div>
+  </div>
+
+<script>
+/**
+ * 1. MOTOR DE SÍNTESIS ACÚSTICA (Algoritmo de Karplus-Strong + Caja de Resonancia)
+ */
+class AcousticSynth {
+  constructor() {
+    this.ctx = null;
+    this.bodyFilter1 = null;
+    this.bodyFilter2 = null;
+    this.masterGain = null;
+  }
+
+  init() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AudioCtx();
+
+    // Resonancia de tapa armónica acústica (105 Hz y 235 Hz)
+    this.bodyFilter1 = this.ctx.createBiquadFilter();
+    this.bodyFilter1.type = 'peaking';
+    this.bodyFilter1.frequency.value = 105;
+    this.bodyFilter1.Q.value = 2.2;
+    this.bodyFilter1.gain.value = 5.5;
+
+    this.bodyFilter2 = this.ctx.createBiquadFilter();
+    this.bodyFilter2.type = 'peaking';
+    this.bodyFilter2.frequency.value = 235;
+    this.bodyFilter2.Q.value = 1.8;
+    this.bodyFilter2.gain.value = 4.0;
+
+    // Compresor suave para cuando se rasguean las 6 cuerdas juntas
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.value = -14;
+    this.compressor.ratio.value = 4;
+
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0.85;
+
+    this.bodyFilter1.connect(this.bodyFilter2);
+    this.bodyFilter2.connect(this.compressor);
+    this.compressor.connect(this.masterGain);
+    this.masterGain.connect(this.ctx.destination);
+  }
+
+  pluck(freq, stringIndex, velocity = 0.9) {
+    this.init();
+    const sr = this.ctx.sampleRate;
+    const duration = 3.2;
+    const bufferSize = Math.floor(sr * duration);
+    const buffer = this.ctx.createBuffer(1, bufferSize, sr);
+    const data = buffer.getChannelData(0);
+
+    // Período de la cuerda en muestras
+    const N = Math.max(2, Math.round(sr / freq));
+    const noise = new Float32Array(N);
+
+    // Excitación inicial (púa + uña: suavizado según el grosor de la cuerda)
+    let prev = 0;
+    const brightness = 0.35 + (5 - stringIndex) * 0.08; // Cuerdas agudas más brillantes
+    for (let i = 0; i < N; i++) {
+      const raw = (Math.random() * 2 - 1) * velocity;
+      noise[i] = prev * (1 - brightness) + raw * brightness;
+      prev = noise[i];
+    }
+
+    for (let i = 0; i < N; i++) {
+      data[i] = noise[i];
+    }
+
+    // Factor de amortiguamiento dependiente de la cuerda
+    const damping = 0.9945 - (5 - stringIndex) * 0.0005;
+    for (let i = N; i < bufferSize; i++) {
+      data[i] = damping * 0.5 * (data[i - N] + data[i - N + 1]);
+    }
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+
+    // Transiente sutil del ataque de la púa
+    const env = this.ctx.createGain();
+    env.gain.setValueAtTime(1.0, this.ctx.currentTime);
+    env.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+
+    src.connect(env);
+    env.connect(this.bodyFilter1);
+    src.start();
+  }
+}
+
+const synth = new AcousticSynth();
+
+/**
+ * 2. DATOS MUSICALES, AFINACIÓN Y DICCIONARIO DE ACORDES
+ * Orden de cuerdas visual (de arriba hacia abajo):
+ * Índice 0 = 1ra cuerda (E4, fina) ... Índice 5 = 6ta cuerda (E2, gruesa)
+ */
+const STRINGS = [
+  { name: 'E4', baseFreq: 329.63, midi: 64, gauge: 1.4, color: '#e2e8f0' }, // 1ra
+  { name: 'B3', baseFreq: 246.94, midi: 59, gauge: 1.8, color: '#cbd5e1' }, // 2da
+  { name: 'G3', baseFreq: 196.00, midi: 55, gauge: 2.3, color: '#d97706' }, // 3ra bronce
+  { name: 'D3', baseFreq: 146.83, midi: 50, gauge: 2.8, color: '#b45309' }, // 4ta bronce
+  { name: 'A2', baseFreq: 110.00, midi: 45, gauge: 3.4, color: '#92400e' }, // 5ta bronce
+  { name: 'E2', baseFreq: 82.41,  midi: 40, gauge: 4.1, color: '#78350f' }  // 6ta bronce
+];
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// Acordes definidos de 1ra cuerda (índice 0) a 6ta cuerda (índice 5). -1 = cuerda muteada (X)
+const CHORDS = {
+  'C':     { frets: [0, 1, 0, 2, 3, -1], fingers: [0, 1, 0, 2, 3, 0], root: 'C' },
+  'D':     { frets: [2, 3, 2, 0, -1, -1], fingers: [2, 3, 1, 0, 0, 0], root: 'D' },
+  'E':     { frets: [0, 0, 1, 2, 2, 0], fingers: [0, 0, 1, 3, 2, 0], root: 'E' },
+  'G':     { frets: [3, 0, 0, 0, 2, 3], fingers: [4, 0, 0, 0, 1, 2], root: 'G' },
+  'A':     { frets: [0, 2, 2, 2, 0, -1], fingers: [0, 3, 2, 1, 0, 0], root: 'A' },
+  'Am':    { frets: [0, 1, 2, 2, 0, -1], fingers: [0, 1, 3, 2, 0, 0], root: 'A' },
+  'Dm':    { frets: [1, 3, 2, 0, -1, -1], fingers: [1, 3, 2, 0, 0, 0], root: 'D' },
+  'Em':    { frets: [0, 0, 0, 2, 2, 0], fingers: [0, 0, 0, 3, 2, 0], root: 'E' },
+  'Bm':    { frets: [2, 3, 4, 4, 2, -1], fingers: [1, 2, 4, 3, 1, 0], root: 'B' },
+  'F#m':   { frets: [2, 2, 2, 4, 4, 2], fingers: [1, 1, 1, 3, 4, 1], root: 'F#' },
+  'F':     { frets: [1, 1, 2, 3, 3, 1], fingers: [1, 1, 2, 4, 3, 1], root: 'F' },
+  'B7':    { frets: [2, 0, 2, 1, 2, -1], fingers: [4, 0, 3, 1, 2, 0], root: 'B' },
+  'E7':    { frets: [0, 0, 1, 0, 2, 0], fingers: [0, 0, 1, 0, 2, 0], root: 'E' },
+  'A7':    { frets: [0, 2, 0, 2, 0, -1], fingers: [0, 3, 0, 2, 0, 0], root: 'A' },
+  'D7':    { frets: [2, 1, 2, 0, -1, -1], fingers: [3, 1, 2, 0, 0, 0], root: 'D' },
+  'G7':    { frets: [1, 0, 0, 0, 2, 3], fingers: [1, 0, 0, 0, 2, 3], root: 'G' },
+  'Cadd9': { frets: [3, 3, 0, 2, 3, -1], fingers: [4, 3, 0, 1, 2, 0], root: 'C' }
+};
+
+const SCALES = {
+  'minor_pent':    [0, 3, 5, 7, 10],
+  'major_pent':    [0, 2, 4, 7, 9],
+  'natural_minor': [0, 2, 3, 5, 7, 8, 10],
+  'major':         [0, 2, 4, 5, 7, 9, 11],
+  'blues':         [0, 3, 5, 6, 7, 10]
+};
+
+/**
+ * 3. ESTADO GLOBAL DE LA APLICACIÓN
+ */
+const NUM_FRETS = 12;
+let state = {
+  currentChord: 'Em',
+  activeFrets: [0, 0, 0, 2, 2, 0], // Un valor por cuerda (0..12 o -1 para X)
+  holdMode: false,
+  scaleRoot: 'NONE',
+  scaleType: 'minor_pent',
+  capo: 0,
+  showNoteNames: true,
+  vibrations: [0, 0, 0, 0, 0, 0],
+  ripples: []
+};
+
+function getNoteName(stringIdx, fret) {
+  const effectiveFret = fret + state.capo;
+  const midi = STRINGS[stringIdx].midi + effectiveFret;
+  return NOTE_NAMES[midi % 12];
+}
+
+function getFrequency(stringIdx, fret) {
+  const effectiveFret = fret + state.capo;
+  return STRINGS[stringIdx].baseFreq * Math.pow(2, effectiveFret / 12);
+}
+
+function loadChord(chordKey) {
+  state.currentChord = chordKey;
+  if (chordKey === 'NONE') {
+    state.activeFrets = [0, 0, 0, 0, 0, 0];
+    document.getElementById('activeChordBadge').textContent = 'Libre';
+  } else if (CHORDS[chordKey]) {
+    state.activeFrets = [...CHORDS[chordKey].frets];
+    document.getElementById('activeChordBadge').textContent = chordKey;
+  }
+}
+
+function triggerString(stringIdx, fret, velocity = 0.9) {
+  if (fret < 0) return; // Cuerda muteada
+  const freq = getFrequency(stringIdx, fret);
+  synth.pluck(freq, stringIdx, velocity);
+  state.vibrations[stringIdx] = 1.0;
+}
+
+function strumActiveChord(direction = 'down') {
+  const order = direction === 'down' ? [5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5];
+  let delay = 0;
+  order.forEach((sIdx) => {
+    const fret = state.activeFrets[sIdx];
+    if (fret >= 0) {
+      setTimeout(() => {
+        triggerString(sIdx, fret, 0.85);
+      }, delay);
+      delay += 32; // 32ms entre cuerdas simula el barrido natural del pulgar/púa
+    }
+  });
+}
+
+/**
+ * 4. RENDERIZADO DEL DIAPASÓN Y LA ZONA DE RASGUEO
+ */
+const fbCanvas = document.getElementById('fretboard');
+const fbCtx = fbCanvas.getContext('2d');
+const stCanvas = document.getElementById('strumCanvas');
+const stCtx = stCanvas.getContext('2d');
+
+function resizeCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+  const fbRect = fbCanvas.parentElement.getBoundingClientRect();
+  fbCanvas.width = fbRect.width * dpr;
+  fbCanvas.height = fbRect.height * dpr;
+  fbCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const stRect = stCanvas.parentElement.getBoundingClientRect();
+  stCanvas.width = stRect.width * dpr;
+  stCanvas.height = stRect.height * dpr;
+  stCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+window.addEventListener('resize', resizeCanvases);
+resizeCanvases();
+
+function getFretboardLayout() {
+  const w = fbCanvas.clientWidth;
+  const h = fbCanvas.clientHeight;
+  const padTop = 34;
+  const padBottom = 30;
+  const nutX = 58; // Columna izquierda para cuerdas al aire (0) y muteadas (X)
+  const usableW = w - nutX - 18;
+  const fretW = usableW / NUM_FRETS;
+  const usableH = h - padTop - padBottom;
+  const stringSpacing = usableH / 5;
+  return { w, h, padTop, padBottom, nutX, fretW, stringSpacing };
+}
+
+function isNoteInScale(noteName) {
+  if (state.scaleRoot === 'NONE') return { inScale: false, isRoot: false };
+  const rootIdx = NOTE_NAMES.indexOf(state.scaleRoot);
+  const noteIdx = NOTE_NAMES.indexOf(noteName);
+  const interval = (noteIdx - rootIdx + 12) % 12;
+  const intervals = SCALES[state.scaleType] || [];
+  return {
+    inScale: intervals.includes(interval),
+    isRoot: interval === 0
+  };
+}
+
+function renderLoop() {
+  const L = getFretboardLayout();
+  fbCtx.clearRect(0, 0, L.w, L.h);
+
+  // 1. Madera del diapasón (Rosewood oscuro)
+  const woodGrad = fbCtx.createLinearGradient(0, L.padTop - 14, 0, L.h - L.padBottom + 14);
+  woodGrad.addColorStop(0, '#362317');
+  woodGrad.addColorStop(0.5, '#26170e');
+  woodGrad.addColorStop(1, '#362317');
+  fbCtx.fillStyle = woodGrad;
+  fbCtx.fillRect(L.nutX, L.padTop - 16, L.w - L.nutX - 10, (L.stringSpacing * 5) + 32);
+
+  // 2. Cejuela (Nut de hueso)
+  fbCtx.fillStyle = '#e8dccb';
+  fbCtx.fillRect(L.nutX - 6, L.padTop - 16, 6, (L.stringSpacing * 5) + 32);
+
+  // 3. Trastes metálicos y numeración
+  for (let f = 1; f <= NUM_FRETS; f++) {
+    const x = L.nutX + f * L.fretW;
+    fbCtx.strokeStyle = '#9ca3af';
+    fbCtx.lineWidth = 2.5;
+    fbCtx.beginPath();
+    fbCtx.moveTo(x, L.padTop - 16);
+    fbCtx.lineTo(x, L.padTop + L.stringSpacing * 5 + 16);
+    fbCtx.stroke();
+
+    // Número de traste arriba
+    fbCtx.fillStyle = '#9ca3af';
+    fbCtx.font = '600 11px system-ui';
+    fbCtx.textAlign = 'center';
+    fbCtx.fillText(f, x - L.fretW / 2, 18);
+
+    // Marcadores nacarados (Inlays en 3, 5, 7, 9, 12)
+    if ([3, 5, 7, 9].
