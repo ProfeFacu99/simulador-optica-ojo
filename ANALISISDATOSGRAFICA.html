@@ -4,9 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Graficador de Datos</title>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Dependencias para Zoom y Panning -->
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <!-- html2canvas para exportar tabla y gráfica juntas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
     <style>
-        /* Ajuste de contraste: colores más oscuros y definidos */
         :root {
             --primary: #1d4ed8; 
             --primary-hover: #1e3a8a;
@@ -42,8 +48,9 @@
         th { background: #f1f5f9; padding: 0.4rem; font-weight: normal; }
         .th-inputs { display: flex; flex-direction: column; gap: 0.2rem; }
         input { width: 100%; border: none; padding: 0.5rem; background: transparent; color: var(--text); text-align: center; font-size: 0.95rem; outline: none; }
+        input.small-input { border: 1px solid var(--border); padding: 0.3rem; border-radius: var(--radius); width: 70px; background: white;}
         input:focus { background: #eff6ff; }
-        input::placeholder { color: #94a3b8; } /* Placeholder gris claro */
+        input::placeholder { color: #94a3b8; }
         th input.col-name { font-weight: 600; }
         th input.col-unit { font-size: 0.85rem; color: var(--text-light); }
         .delete-col, .delete-row { position: absolute; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-size: 0.8rem; cursor: pointer; opacity: 0; display: flex; align-items: center; justify-content: center; font-weight: bold;}
@@ -60,13 +67,28 @@
         .error-msg { color: #dc2626; font-weight: 500; }
         .fit-eq { font-weight: bold; font-size: 1.05rem; }
         .fit-params { color: var(--text-light); }
+
+        #coords-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.4rem 0.6rem;
+            font-size: 0.85rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div class="container" id="export-container">
     <div class="panel-left">
-        <div class="controls-row">
+        <div class="controls-row" data-html2canvas-ignore>
             <button onclick="addRow()">+ Fila</button>
             <button onclick="addColumn()">+ Columna</button>
         </div>
@@ -99,9 +121,17 @@
                     <option value="power">Potencia</option>
                 </select>
             </div>
-            <button class="primary" onclick="downloadChart()" style="margin-left: auto;">Descargar PNG</button>
+            
+            <div class="select-group" id="asymptote-container" style="display: none;">
+                <label>Asíntota (C):</label>
+                <input type="number" id="input-asymptote" class="small-input" value="0" step="1" oninput="updateChart()">
+            </div>
+
+            <button onclick="resetZoom()" style="margin-left: auto;" data-html2canvas-ignore>Autoescala</button>
+            <button class="primary" onclick="downloadChart()" data-html2canvas-ignore>Descargar PNG</button>
         </div>
         <div class="chart-container">
+            <div id="coords-display"></div>
             <canvas id="chart"></canvas>
         </div>
         <div id="fit-results">Selecciona un ajuste para ver los parámetros.</div>
@@ -109,7 +139,7 @@
 </div>
 
 <script>
-    // Valores por defecto vacíos
+    // Tablas en blanco para que los alumnos ingresen los datos
     let columns = [
         { name: "Tiempo", unit: "s" },
         { name: "", unit: "" }
@@ -125,6 +155,7 @@
         updateSelects();
         initChart();
         setupPaste();
+        setupMouseTracking();
     }
 
     function renderTable() {
@@ -133,7 +164,7 @@
         columns.forEach((col, cIdx) => {
             const th = document.createElement('th');
             th.innerHTML = `
-                ${columns.length > 2 ? `<button class="delete-col" onclick="deleteColumn(${cIdx})" title="Eliminar columna">×</button>` : ''}
+                ${columns.length > 2 ? `<button class="delete-col" onclick="deleteColumn(${cIdx})" title="Eliminar columna" data-html2canvas-ignore>×</button>` : ''}
                 <div class="th-inputs">
                     <input class="col-name" type="text" value="${col.name}" oninput="updateColumnName(${cIdx}, this.value)" placeholder="Variable">
                     <input class="col-unit" type="text" value="${col.unit}" oninput="updateColumnUnit(${cIdx}, this.value)" placeholder="Unidad">
@@ -149,7 +180,7 @@
             row.forEach((val, cIdx) => {
                 const td = document.createElement('td');
                 if (cIdx === 0 && data.length > 2) {
-                    td.innerHTML += `<button class="delete-row" onclick="deleteRow(${rIdx})" title="Eliminar fila">×</button>`;
+                    td.innerHTML += `<button class="delete-row" onclick="deleteRow(${rIdx})" title="Eliminar fila" data-html2canvas-ignore>×</button>`;
                 }
                 const input = document.createElement('input');
                 input.type = 'text';
@@ -165,31 +196,10 @@
         });
     }
 
-    function addRow() {
-        data.push(Array(columns.length).fill(""));
-        renderTable();
-    }
-
-    function deleteRow(rIdx) {
-        data.splice(rIdx, 1);
-        renderTable();
-        updateChart();
-    }
-
-    function addColumn() {
-        columns.push({ name: "", unit: "" });
-        data.forEach(row => row.push(""));
-        renderTable();
-        updateSelects();
-    }
-
-    function deleteColumn(cIdx) {
-        columns.splice(cIdx, 1);
-        data.forEach(row => row.splice(cIdx, 1));
-        renderTable();
-        updateSelects();
-    }
-
+    function addRow() { data.push(Array(columns.length).fill("")); renderTable(); }
+    function deleteRow(rIdx) { data.splice(rIdx, 1); renderTable(); updateChart(); }
+    function addColumn() { columns.push({ name: "", unit: "" }); data.forEach(row => row.push("")); renderTable(); updateSelects(); }
+    function deleteColumn(cIdx) { columns.splice(cIdx, 1); data.forEach(row => row.splice(cIdx, 1)); renderTable(); updateSelects(); }
     function updateColumnName(cIdx, val) { columns[cIdx].name = val; updateSelects(); updateChart(); }
     function updateColumnUnit(cIdx, val) { columns[cIdx].unit = val; updateChart(); }
 
@@ -276,11 +286,19 @@
         if (n < 2) return { error: "Datos insuficientes para realizar un ajuste." };
 
         let x = [], y = [];
+        const C = parseFloat(document.getElementById('input-asymptote').value) || 0;
+
         for (let p of pts) {
-            if (type === 'exp' && p.y <= 0) return { error: "Los valores de Y deben ser > 0 para el ajuste exponencial." };
-            if (type === 'power' && (p.x <= 0 || p.y <= 0)) return { error: "X e Y deben ser > 0 para el ajuste de potencia." };
-            x.push(type === 'power' ? Math.log(p.x) : p.x);
-            y.push((type === 'exp' || type === 'power') ? Math.log(p.y) : p.y);
+            if (type === 'exp') {
+                const yAdj = p.y - C;
+                if (yAdj <= 0) return { error: `Para el ajuste con asíntota ${C}, todos los valores de Y deben ser mayores a ${C}.` };
+                x.push(p.x);
+                y.push(Math.log(yAdj));
+            } else {
+                if (type === 'power' && (p.x <= 0 || p.y <= 0)) return { error: "X e Y deben ser > 0 para el ajuste de potencia." };
+                x.push(type === 'power' ? Math.log(p.x) : p.x);
+                y.push(type === 'power' ? Math.log(p.y) : p.y);
+            }
         }
 
         let sumX=0, sumY=0, sumXY=0, sumXX=0, sumYY=0;
@@ -294,8 +312,12 @@
         const r2 = Math.pow((n*sumXY - sumX*sumY) / Math.sqrt(denom * (n*sumYY - sumY*sumY)), 2);
 
         let eq = "", params = "", curve = [];
-        const minX = pts[0].x, maxX = pts[pts.length-1].x;
-        const step = (maxX - minX) / 100;
+        const minX = pts[0].x;
+        const maxX = pts[pts.length-1].x;
+        
+        const rangeX = maxX - minX === 0 ? 1 : maxX - minX;
+        const extendedMaxX = maxX + (rangeX * 1.5); 
+        const step = (extendedMaxX - minX) / 100;
 
         if (type === 'linear') {
             let ssRes = 0, ssX = 0, xMean = sumX/n;
@@ -313,9 +335,18 @@
         } 
         else if (type === 'exp') {
             const A = Math.exp(b);
-            eq = `y = A · e^(k·x)`;
-            params = `Coeficiente (A) = ${formatNum(A)} &nbsp;|&nbsp; Constante (k) = ${formatNum(m)} &nbsp;|&nbsp; R² = ${formatNum(r2)}`;
-            for (let i=0; i<=100; i++) { let px = minX + i*step; curve.push({x: px, y: A*Math.exp(m*px)}); }
+            if (C === 0) {
+                eq = `y = A · e^(k·x)`;
+                params = `Coeficiente (A) = ${formatNum(A)} &nbsp;|&nbsp; Constante de caída (k) = ${formatNum(m)} &nbsp;|&nbsp; R² = ${formatNum(r2)}`;
+            } else {
+                eq = `y = A · e^(k·x) + C`;
+                params = `A = ${formatNum(A)} &nbsp;|&nbsp; k = ${formatNum(m)} &nbsp;|&nbsp; C = ${C} &nbsp;|&nbsp; R² = ${formatNum(r2)}`;
+            }
+            
+            for (let i=0; i<=100; i++) { 
+                let px = minX + i*step; 
+                curve.push({x: px, y: A*Math.exp(m*px) + C}); 
+            }
         } 
         else if (type === 'power') {
             const A = Math.exp(b);
@@ -334,15 +365,66 @@
             data: { datasets: [] },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: { 
+                    legend: { display: false },
+                    zoom: {
+                        pan: { enabled: true, mode: 'xy' },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'xy',
+                        }
+                    }
+                },
                 scales: {
-                    x: { type: 'linear', position: 'bottom', title: { display: true, text: 'X', font: { weight: 'bold' } }, grid: { color: '#e2e8f0' } },
-                    y: { title: { display: true, text: 'Y', font: { weight: 'bold' } }, grid: { color: '#e2e8f0' } }
+                    x: { 
+                        type: 'linear', position: 'bottom', 
+                        title: { display: true, text: 'X', font: { weight: 'bold' } }, 
+                        grid: { 
+                            color: (context) => context.tick.value === 0 ? '#000000' : '#e2e8f0',
+                            lineWidth: (context) => context.tick.value === 0 ? 2 : 1
+                        } 
+                    },
+                    y: { 
+                        title: { display: true, text: 'Y', font: { weight: 'bold' } }, 
+                        grid: { 
+                            color: (context) => context.tick.value === 0 ? '#000000' : '#e2e8f0',
+                            lineWidth: (context) => context.tick.value === 0 ? 2 : 1
+                        } 
+                    }
                 },
                 animation: false
             }
         });
         updateChart();
+    }
+
+    function resetZoom() {
+        if (chartInstance) { chartInstance.resetZoom(); }
+    }
+
+    function setupMouseTracking() {
+        const canvas = document.getElementById('chart');
+        const coordsDisplay = document.getElementById('coords-display');
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!chartInstance) return;
+            const rect = canvas.getBoundingClientRect();
+            const xPixel = e.clientX - rect.left;
+            const yPixel = e.clientY - rect.top;
+
+            const xValue = chartInstance.scales.x.getValueForPixel(xPixel);
+            const yValue = chartInstance.scales.y.getValueForPixel(yPixel);
+
+            if (xValue !== undefined && yValue !== undefined) {
+                const xName = chartInstance.options.scales.x.title.text;
+                const yName = chartInstance.options.scales.y.title.text;
+                coordsDisplay.innerHTML = `<strong>${xName}:</strong> ${xValue.toFixed(2)}<br><strong>${yName}:</strong> ${yValue.toFixed(2)}`;
+                coordsDisplay.style.display = 'block';
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => { coordsDisplay.style.display = 'none'; });
     }
 
     function updateChart() {
@@ -351,6 +433,8 @@
         const yIdx = parseInt(document.getElementById('sel-y').value);
         const fitType = document.getElementById('sel-fit').value;
         const resDiv = document.getElementById('fit-results');
+
+        document.getElementById('asymptote-container').style.display = (fitType === 'exp') ? 'flex' : 'none';
 
         const colX = columns[xIdx];
         const colY = columns[yIdx];
@@ -394,10 +478,20 @@
     }
 
     function downloadChart() {
-        const link = document.createElement('a');
-        link.download = 'grafico.png';
-        link.href = document.getElementById('chart').toDataURL('image/png', 1.0);
-        link.click();
+        const container = document.getElementById('export-container');
+        const originalCoordsDisplay = document.getElementById('coords-display').style.display;
+        document.getElementById('coords-display').style.display = 'none';
+        
+        html2canvas(container, {
+            backgroundColor: '#e2e8f0',
+            scale: 2 
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'analisis_datos_laboratorio.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            document.getElementById('coords-display').style.display = originalCoordsDisplay;
+        });
     }
 
     window.onload = init;
